@@ -1,95 +1,31 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Send, Bot, User, Lightbulb, CheckCircle2 } from "lucide-react";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Slide } from "../data/slides";
+
+// Initialise Gemini client
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY as string);
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+async function getAIResponse(question: string, slide: Slide): Promise<string> {
+  try {
+    const systemContext = `You are ElexicoAI, an expert backend engineering tutor embedded inside an interactive presentation app. 
+The user is currently viewing a slide titled "${slide.title}" about: ${slide.description}
+Key points covered: ${slide.keyPoints.join(", ")}.
+Answer concisely (2-4 sentences max), in a friendly and educational tone. Focus on backend engineering concepts.`;
+
+    const result = await geminiModel.generateContent(`${systemContext}\n\nUser question: ${question}`);
+    return result.response.text();
+  } catch (err) {
+    console.error("Gemini error:", err);
+    return `Sorry, I couldn't reach the AI right now. Here's a quick answer: ${slide.aiInsight}`;
+  }
+}
 
 interface Message {
   role: "user" | "ai";
   text: string;
-}
-
-// Per-slide chat response banks keyed by slide id
-const slideResponses: Record<number, Record<string, string>> = {
-  1: {
-    "what languages are used for backend?": "Common backend languages include JavaScript (Node.js), Python (Django/FastAPI), Java (Spring Boot), Go, Ruby (Rails), and Rust. Node.js excels at real-time apps, Python at data/ML tasks, Go at raw performance.",
-    "what is a rest api?": "A REST API uses standard HTTP methods (GET, POST, PUT, DELETE) and stateless communication. Resources are identified by URLs and data is exchanged in JSON. It's the most widely used API style today.",
-    "how does backend differ from frontend?": "The frontend is what users see in their browser (HTML, CSS, JS). The backend is the server-side engine — it runs business logic, queries databases, enforces security, and returns data to the frontend via APIs.",
-    "what is microservices?": "Microservices split a backend into small, independently deployable services (e.g. auth service, payment service, notifications). Each runs its own process and communicates over APIs. This improves scalability and fault isolation.",
-    "what is cloud computing?": "Cloud computing lets you rent servers, databases, and storage on demand from providers like AWS, GCP, or Azure — without owning physical hardware. You pay for what you use and can scale up or down instantly.",
-  },
-  2: {
-    "what is nginx?": "Nginx (engine-x) is a high-performance web server and reverse proxy. It serves static files, load balances traffic, handles SSL termination, and can act as an API gateway — all with very low memory usage.",
-    "difference between server and cloud?": "A server is a physical or virtual machine. The cloud is a network of servers managed by providers (AWS, GCP, Azure) that you rent on demand. Cloud adds auto-scaling, managed services, and global distribution.",
-    "how does docker relate to servers?": "Docker packages your app + its dependencies into a container that runs identically on any server. Instead of setting up a server manually, you ship a Docker image. Kubernetes then orchestrates many containers across many servers.",
-    "what is a load balancer?": "A load balancer distributes incoming traffic across multiple server instances. If server 1 is busy, it routes the next request to server 2. This prevents any single server from becoming a bottleneck and improves availability.",
-    "what is a cdn?": "A CDN (Content Delivery Network) caches your static assets (images, CSS, JS) on servers around the world. When a user in Tokyo visits your site, they get files from a Tokyo CDN node — not from your server in the US — making it much faster.",
-  },
-  3: {
-    "what is rest vs graphql?": "REST has fixed endpoints (/users, /posts) — you get back all fields. GraphQL has one endpoint and you ask for exactly the fields you need. REST is simpler; GraphQL prevents over-fetching in complex UIs.",
-    "how is an api secured?": "APIs are secured with: API keys (simple token), JWT Bearer tokens (stateless), OAuth 2.0 (delegated auth), HTTPS (encrypted transport), rate limiting (prevent abuse), and CORS policies (restrict which domains can call).",
-    "what is a webhook?": "A webhook is a reverse API call — instead of your app polling a service for updates, the service calls your endpoint when something happens. E.g. Stripe calls your /webhook endpoint when a payment succeeds.",
-    "what is an api key?": "An API key is a unique token passed in the request header that identifies the calling application. It's used for authentication and rate limiting. Unlike JWTs, API keys don't carry user identity claims.",
-    "what is grpc?": "gRPC is a high-performance RPC framework from Google. It uses Protocol Buffers (binary format, much smaller than JSON) and HTTP/2. It's mainly used for internal microservice communication where performance is critical.",
-  },
-  4: {
-    "sql vs nosql — when to use which?": "Use SQL (PostgreSQL, MySQL) when your data is structured, you need ACID transactions, and relationships matter. Use NoSQL (MongoDB, Redis) when your schema is flexible, you need horizontal scaling, or you're storing unstructured data.",
-    "what is database indexing?": "An index is a data structure (B-tree or hash) that lets the database jump directly to matching rows instead of scanning every row. It speeds up reads by 100-1000x on large tables — at the cost of slightly slower writes and extra storage.",
-    "what is an orm?": "An ORM (Object Relational Mapper) lets you interact with a database using your programming language instead of raw SQL. Prisma, Sequelize, and TypeORM are popular Node.js ORMs. They generate SQL from code and handle migrations.",
-    "what is acid?": "ACID stands for: Atomicity (all-or-nothing transactions), Consistency (data always valid), Isolation (concurrent transactions don't interfere), Durability (committed data survives crashes). These guarantee reliable SQL transactions.",
-    "what is redis?": "Redis is an in-memory key-value store — blazing fast (<1ms reads). It's used for: caching database results, storing sessions, rate limiting counters, pub/sub messaging, and leaderboards. Data is stored in RAM, so it's not for permanent storage.",
-  },
-  5: {
-    "what is jwt?": "JWT (JSON Web Token) has 3 parts: Header (algorithm), Payload (user id, roles, expiry), and Signature (HMAC/RSA). The server signs it on login; the client sends it on every request. No DB lookup needed — just verify the signature.",
-    "oauth vs session auth?": "Sessions: server stores session data, client holds only a session ID cookie — stateful. OAuth/JWT: client holds a signed token with claims — stateless, scales better. OAuth is for delegated access (Login with Google).",
-    "how to store passwords safely?": "NEVER store plain-text passwords. Hash them with bcrypt or Argon2 — these are slow by design (making brute-force expensive). Use 10-12 bcrypt rounds. Always add a unique salt per password to prevent rainbow table attacks.",
-    "what is mfa?": "Multi-Factor Authentication requires a second proof of identity beyond password: a TOTP code (Google Authenticator), SMS code, biometric, or hardware key. MFA blocks 99.9% of automated account attacks even if the password is leaked.",
-    "what is oauth?": "OAuth 2.0 is a delegation protocol — it lets users grant apps limited access to their accounts without sharing passwords. 'Login with Google' uses OAuth: Google authenticates you and issues an access token to the requesting app.",
-  },
-  6: {
-    "what is middleware in express?": "Middleware are functions in the request pipeline: (req, res, next) => {}. They run before your route handler. Common uses: logging (Morgan), auth verification, body parsing (express.json()), rate limiting, CORS headers.",
-    "node.js vs python for backend?": "Node.js: same language as frontend, huge npm ecosystem, excellent for I/O-heavy and real-time apps. Python: cleaner syntax, dominant in data/ML, great frameworks (Django, FastAPI). For pure APIs — both are excellent choices.",
-    "what is npm?": "npm (Node Package Manager) is the world's largest software registry with 2.5M+ packages. You can add any package to your project with 'npm install'. It manages dependencies, scripts, and versioning via package.json.",
-    "what is the event loop?": "Node.js is single-threaded but handles thousands of concurrent connections via the event loop. When an async operation (DB query, file read) starts, Node registers a callback and moves on. When the operation completes, the callback runs — no thread blocking.",
-    "what is nestjs?": "NestJS is a structured, TypeScript-first Node.js framework inspired by Angular. It uses decorators, dependency injection, and modules. It's opinionated (unlike Express) and is popular for large enterprise backends.",
-  },
-  7: {
-    "what is dns?": "DNS (Domain Name System) translates domain names (google.com) to IP addresses (142.250.80.46). Your browser queries a DNS resolver (ISP or 8.8.8.8), which returns the IP. Results are cached (TTL: typically 300s) to avoid repeated lookups.",
-    "what are http headers?": "HTTP headers are key-value metadata sent with every request/response. Request headers: Authorization (auth token), Content-Type, Accept, Cookie. Response headers: Set-Cookie, Cache-Control, Content-Encoding, CORS headers.",
-    "how does https work?": "HTTPS = HTTP + TLS encryption. During the TLS handshake, the server presents a certificate, they negotiate an encryption algorithm, exchange keys, and establish an encrypted tunnel. All subsequent data is encrypted — unreadable to anyone intercepting.",
-    "what are http status codes?": "2xx = Success (200 OK, 201 Created, 204 No Content). 3xx = Redirect (301 Permanent, 302 Temporary, 304 Not Modified). 4xx = Client error (400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 429 Rate Limited). 5xx = Server error (500, 502, 503).",
-    "what is http/2?": "HTTP/2 improves on HTTP/1.1 with: multiplexing (multiple requests over one connection simultaneously), header compression (HPACK), server push (server sends assets before browser requests them), and binary framing. Typically 2-3x faster.",
-  },
-  8: {
-    "websockets vs http polling?": "HTTP polling asks 'any updates?' on a timer — wastes bandwidth. Long polling waits until the server has something. WebSockets open one persistent TCP connection — server and client both push data instantly at any time. Far more efficient for real-time.",
-    "how does socket.io work?": "Socket.IO wraps WebSockets with extras: automatic reconnection, rooms (grouped connections), namespaces, and HTTP long-polling fallback. You emit events (socket.emit('message', data)) and listen for them — like a real-time event bus.",
-    "what is webrtc?": "WebRTC (Web Real-Time Communication) enables peer-to-peer audio, video, and data directly between browsers — no server in the media path. Used by Google Meet, Zoom (hybrid), and Discord. Signaling still goes through a server, but the actual streams are P2P.",
-    "what is kafka?": "Apache Kafka is a distributed event streaming platform. Producers write messages to topics; consumers read them. It handles millions of messages/second with persistence and replay. Used for real-time analytics, event sourcing, and microservice communication.",
-    "what is redis pub/sub?": "Redis Pub/Sub lets services publish messages to channels and subscribe to receive them. When scaling WebSocket servers horizontally, Redis Pub/Sub synchronizes messages across all instances — when user A on server 1 sends a message, users on server 2 also receive it.",
-  },
-};
-
-function getAIResponse(question: string, slide: Slide): string {
-  const slideBank = slideResponses[slide.id] ?? {};
-  const key = question.toLowerCase().trim();
-
-  // Exact match
-  if (slideBank[key]) return slideBank[key];
-
-  // Fuzzy: check if any stored key words appear in the question
-  for (const [k, v] of Object.entries(slideBank)) {
-    const keyWords = k.replace(/[^a-z0-9 ]/g, "").split(" ").filter(w => w.length > 3);
-    if (keyWords.some(word => key.includes(word))) return v;
-  }
-
-  // Cross-slide fallback: search all slide banks
-  for (const bank of Object.values(slideResponses)) {
-    for (const [k, v] of Object.entries(bank)) {
-      const keyWords = k.replace(/[^a-z0-9 ]/g, "").split(" ").filter(w => w.length > 4);
-      if (keyWords.some(word => key.includes(word))) return v;
-    }
-  }
-
-  return `Good question about "${slide.title}"! Here's a quick summary: ${slide.aiInsight} — Try one of the suggested questions for a detailed answer.`;
 }
 
 interface AIInsightsPanelProps {
@@ -116,16 +52,15 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim()) return;
     setMessages((prev) => [...prev, { role: "user", text: text.trim() }]);
     setInput("");
     setIsTyping(true);
     setActiveTab("chat");
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { role: "ai", text: getAIResponse(text, slide) }]);
-      setIsTyping(false);
-    }, 700 + Math.random() * 500);
+    const reply = await getAIResponse(text, slide);
+    setMessages((prev) => [...prev, { role: "ai", text: reply }]);
+    setIsTyping(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
