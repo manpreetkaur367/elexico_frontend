@@ -9,10 +9,20 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 
 async function getAIResponse(question: string, slide: Slide): Promise<string> {
   try {
-    const prompt = `You are ElexicoAI, an expert backend engineering tutor inside an interactive presentation app.
-The user is viewing a slide titled "${slide.title}" about: ${slide.description}
-Key points: ${slide.keyPoints.join(", ")}.
-Answer concisely (2-4 sentences), in a friendly educational tone. Focus on backend engineering.
+    const prompt = `You are ElexicoAI, a smart and friendly AI assistant inside an interactive learning app. \
+You have deep expertise in backend engineering, software development, computer science, and general technology topics.
+
+Current slide context (use this for slide-related questions):
+- Slide title: "${slide.title}"
+- About: ${slide.description}
+- Key points: ${slide.keyPoints.join(", ")}
+
+Instructions:
+- If the question is related to the current slide or backend engineering, give a focused, educational answer (2-5 sentences).
+- If the question is a general knowledge, science, math, history, or any other topic OUTSIDE the slide — answer it normally and helpfully as a general AI assistant. Do NOT refuse or say it is out of scope.
+- If the question is completely unrelated to technology, still answer it helpfully and correctly.
+- Always be friendly, clear, and accurate.
+- Never say "I can only answer backend questions" — answer everything.
 
 User question: ${question}`;
 
@@ -21,7 +31,7 @@ User question: ${question}`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 256 },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 512 },
       }),
     });
 
@@ -36,7 +46,7 @@ User question: ${question}`;
       ?? `Here's a quick answer: ${slide.aiInsight}`;
   } catch (err) {
     console.error("Gemini fetch error:", err);
-    return `Here's a quick answer: ${slide.aiInsight}`;
+    return `Sorry, I couldn't reach the AI right now. Here's a quick note: ${slide.aiInsight}`;
   }
 }
 
