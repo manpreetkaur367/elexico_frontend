@@ -81,7 +81,17 @@ interface AIInsightsPanelProps {
 }
 
 export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Store messages per slide — switching slides never deletes history
+  const [allMessages, setAllMessages] = useState<Record<number, Message[]>>({});
+  const messages = allMessages[slide.id] ?? [];
+  const setMessages = (updater: Message[] | ((prev: Message[]) => Message[])) => {
+    setAllMessages((prev) => {
+      const current = prev[slide.id] ?? [];
+      const next = typeof updater === "function" ? updater(current) : updater;
+      return { ...prev, [slide.id]: next };
+    });
+  };
+
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [activeTab, setActiveTab] = useState<"summary" | "chat">("summary");
@@ -89,14 +99,15 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const prevSlideId = useRef(slide.id);
 
   const uid = () => Math.random().toString(36).slice(2);
 
+  // When switching slides, just switch to summary tab — messages are preserved
+  const prevSlideId = useRef(slide.id);
   useEffect(() => {
     if (prevSlideId.current !== slide.id) {
-      setMessages([]);
       setActiveTab("summary");
+      setEditingId(null);
       prevSlideId.current = slide.id;
     }
   }, [slide.id]);
