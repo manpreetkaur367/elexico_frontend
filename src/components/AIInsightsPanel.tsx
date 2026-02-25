@@ -4,51 +4,70 @@ import { Sparkles, Send, Bot, User, Lightbulb, CheckCircle2 } from "lucide-react
 import type { Slide } from "../data/slides";
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string ?? "REDACTED";
-const GEMINI_MODEL = "gemini-2.5-flash-lite";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+// Models listed best-first — automatically falls through to next if quota is exhausted
+const GEMINI_MODELS = [
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash-lite",
+  "gemma-3-4b-it",
+  "gemma-3-1b-it",
+];
+
+function geminiUrl(model: string) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+}
 
 async function getAIResponse(question: string, slide: Slide): Promise<string> {
-  try {
-    const prompt = `You are ElexicoAI, a smart and friendly AI assistant inside an interactive learning app. \
+  const prompt = `You are ElexicoAI, a smart and friendly AI assistant inside an interactive learning app.
 You have deep expertise in backend engineering, software development, computer science, and general technology topics.
 
-Current slide context (use this for slide-related questions):
+Current slide context (use for slide-related questions):
 - Slide title: "${slide.title}"
 - About: ${slide.description}
 - Key points: ${slide.keyPoints.join(", ")}
 
 Instructions:
-- If the question is related to the current slide or backend engineering, give a focused, educational answer (2-5 sentences).
-- If the question is a general knowledge, science, math, history, or any other topic OUTSIDE the slide — answer it normally and helpfully as a general AI assistant. Do NOT refuse or say it is out of scope.
-- If the question is completely unrelated to technology, still answer it helpfully and correctly.
-- Always be friendly, clear, and accurate.
-- Never say "I can only answer backend questions" — answer everything.
+- If the question relates to the current slide or backend engineering, give a focused educational answer (2-5 sentences).
+- If the question is general knowledge, science, math, history, or ANY other topic — answer it normally and helpfully. Do NOT refuse.
+- Always be friendly, clear, and accurate. Never say you can only answer backend questions.
 
 User question: ${question}`;
 
-    const res = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 512 },
-      }),
-    });
+  for (const model of GEMINI_MODELS) {
+    try {
+      const res = await fetch(geminiUrl(model), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 512 },
+        }),
+      });
 
-    if (!res.ok) {
-      const err = await res.json();
-      console.error("Gemini API error:", err);
-      throw new Error(err?.error?.message ?? "API error");
+      const data = await res.json();
+
+      // If quota exceeded, try the next model
+      if (res.status === 429 || data?.error?.code === 429) {
+        console.warn(`Model ${model} quota exceeded, trying next...`);
+        continue;
+      }
+
+      if (!res.ok) {
+        console.error(`Model ${model} error:`, data?.error?.message);
+        continue;
+      }
+
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (text) return text;
+
+    } catch (err) {
+      console.error(`Model ${model} fetch failed:`, err);
+      continue;
     }
-
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
-      ?? `Here's a quick answer: ${slide.aiInsight}`;
-  } catch (err) {
-    console.error("Gemini fetch error:", err);
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return `⚠️ AI error: ${errMsg}. Fallback: ${slide.aiInsight}`;
   }
+
+  // All models exhausted — return fallback
+  return `All AI models are currently at their daily limit. Here's a quick note from the slide: ${slide.aiInsight}`;
 }
 
 interface Message {
