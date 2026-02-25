@@ -3,14 +3,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Send, Bot, User, Lightbulb, CheckCircle2 } from "lucide-react";
 import type { Slide } from "../data/slides";
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string ?? "REDACTED";
+const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "REDACTED") as string;
 
-// Models listed best-first — automatically falls through to next if quota is exhausted
+// Put working models FIRST — ones with quota available
 const GEMINI_MODELS = [
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash-lite",
   "gemma-3-4b-it",
   "gemma-3-1b-it",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash-lite",
 ];
 
 function geminiUrl(model: string) {
@@ -46,14 +46,14 @@ User question: ${question}`;
 
       const data = await res.json();
 
-      // If quota exceeded, try the next model
-      if (res.status === 429 || data?.error?.code === 429) {
-        console.warn(`Model ${model} quota exceeded, trying next...`);
+      // If quota exceeded or permission denied, try the next model
+      if (res.status === 429 || res.status === 403 || data?.error?.code === 429 || data?.error?.code === 403) {
+        console.warn(`Model ${model} unavailable (${res.status}), trying next...`);
         continue;
       }
 
       if (!res.ok) {
-        console.error(`Model ${model} error:`, data?.error?.message);
+        console.warn(`Model ${model} error ${res.status}, trying next...`);
         continue;
       }
 
