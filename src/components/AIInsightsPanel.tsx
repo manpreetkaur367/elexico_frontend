@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Send, Bot, User, Lightbulb, CheckCircle2 } from "lucide-react";
 import type { Slide } from "../data/slides";
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string ?? "REDACTED";
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -46,7 +46,8 @@ User question: ${question}`;
       ?? `Here's a quick answer: ${slide.aiInsight}`;
   } catch (err) {
     console.error("Gemini fetch error:", err);
-    return `Sorry, I couldn't reach the AI right now. Here's a quick note: ${slide.aiInsight}`;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return `⚠️ AI error: ${errMsg}. Fallback: ${slide.aiInsight}`;
   }
 }
 
