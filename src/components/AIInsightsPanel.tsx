@@ -19,6 +19,60 @@ function geminiUrl(model: string) {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 }
 
+// ── AI-generated summary for the Summary tab ──────────────────────────────
+async function getAISummaryData(slide: Slide): Promise<{ description: string; keyPoints: string[] }> {
+  const prompt = `You are ElexicoAI. A student is learning about "${slide.title}" in a backend engineering course.
+
+Write an explanation that is COMPLETELY DIFFERENT from the slide text below. Do NOT copy or paraphrase the slide wording.
+Use a fresh analogy, a different angle, or a real-world story to explain the concept.
+
+Slide description to AVOID repeating: "${slide.description}"
+Slide key points to AVOID repeating: ${slide.keyPoints.map((k, i) => `${i + 1}. ${k}`).join(" | ")}
+
+OUTPUT FORMAT — return ONLY this JSON, nothing else:
+{
+  "description": "One fresh sentence explaining the concept from a new angle.",
+  "keyPoints": [
+    "Fresh insight #1",
+    "Fresh insight #2",
+    "Fresh insight #3",
+    "Fresh insight #4"
+  ]
+}`;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const res = await fetch(geminiUrl(model), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.85, maxOutputTokens: 400 },
+        }),
+      });
+      if (res.status === 429 || res.status === 403) { continue; }
+      if (!res.ok) { continue; }
+      const data = await res.json();
+      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+      // Extract JSON from the response (may be wrapped in markdown code fences)
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.description && Array.isArray(parsed.keyPoints) && parsed.keyPoints.length >= 2) {
+            return { description: parsed.description, keyPoints: parsed.keyPoints.slice(0, 4) };
+          }
+        } catch { /* malformed JSON — try next model */ }
+      }
+    } catch { continue; }
+  }
+  // Fallback: use the slide's aiInsight as description
+  return {
+    description: slide.aiInsight,
+    keyPoints: slide.keyPoints,
+  };
+}
+
 async function getAIResponse(question: string, slide: Slide): Promise<string> {
   const prompt = `You are ElexicoAI, a concise AI assistant inside a learning app.
 
@@ -101,6 +155,19 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ── AI-generated summary (different from slide static content) ──
+  const [aiSummary, setAiSummary] = useState<{ description: string; keyPoints: string[] } | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  useEffect(() => {
+    setAiSummary(null);
+    setSummaryLoading(true);
+    getAISummaryData(slide).then((result) => {
+      setAiSummary(result);
+      setSummaryLoading(false);
+    });
+  }, [slide.id]);
 
   // ── TTS: one instance drives all audio in this panel ──
   const [ttsText, setTtsText] = useState("");
@@ -326,14 +393,28 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
                   <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.12em]">What is it?</span>
                 </div>
                 <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                  onClick={() => readAloud(slide.description)}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold"
+                  onClick={() => aiSummary && readAloud(aiSummary.description)}
+                  disabled={summaryLoading || !aiSummary}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold disabled:opacity-40"
                   style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
                   <Volume2 className="w-2.5 h-2.5" /> Listen
                 </motion.button>
               </div>
               <div className="px-4 py-3">
-                <p className="text-[13px] text-gray-700 leading-[1.8]">{slide.description}</p>
+                {summaryLoading || !aiSummary ? (
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-3 rounded-full bg-gray-100 w-full" />
+                    <div className="h-3 rounded-full bg-gray-100 w-5/6" />
+                    <div className="h-3 rounded-full bg-gray-100 w-4/6" />
+                  </div>
+                ) : (
+                  <motion.p
+                    key={aiSummary.description}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="text-[13px] text-gray-700 leading-[1.8]">
+                    {aiSummary.description}
+                  </motion.p>
+                )}
               </div>
             </div>
 
@@ -350,25 +431,37 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
                   <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.12em]">Key Points</span>
                 </div>
                 <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                  onClick={() => readAloud(slide.keyPoints.join(". "))}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold"
+                  onClick={() => aiSummary && readAloud(aiSummary.keyPoints.join(". "))}
+                  disabled={summaryLoading || !aiSummary}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold disabled:opacity-40"
                   style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
                   <Volume2 className="w-2.5 h-2.5" /> Listen
                 </motion.button>
               </div>
               <div className="px-4 py-3 space-y-2.5">
-                {slide.keyPoints.map((point, i) => (
-                  <motion.div key={i}
-                    initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.04 + i * 0.055 }}
-                    className="flex items-start gap-3">
-                    <div className="mt-[5px] w-5 h-5 rounded-lg flex-shrink-0 flex items-center justify-center text-[10px] font-black text-blue-600"
-                      style={{ background: "#dbeafe", border: "1px solid #bfdbfe" }}>
-                      {i + 1}
-                    </div>
-                    <p className="text-[13px] text-gray-700 leading-relaxed flex-1">{point}</p>
-                  </motion.div>
-                ))}
+                {summaryLoading || !aiSummary ? (
+                  <div className="space-y-3 animate-pulse">
+                    {[0,1,2,3].map(i => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-lg bg-gray-100 flex-shrink-0" />
+                        <div className="h-3 rounded-full bg-gray-100 flex-1" style={{ width: `${75 + i * 5}%` }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  aiSummary.keyPoints.map((point, i) => (
+                    <motion.div key={i}
+                      initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.04 + i * 0.055 }}
+                      className="flex items-start gap-3">
+                      <div className="mt-[5px] w-5 h-5 rounded-lg flex-shrink-0 flex items-center justify-center text-[10px] font-black text-blue-600"
+                        style={{ background: "#dbeafe", border: "1px solid #bfdbfe" }}>
+                        {i + 1}
+                      </div>
+                      <p className="text-[13px] text-gray-700 leading-relaxed flex-1">{point}</p>
+                    </motion.div>
+                  ))
+                )}
               </div>
             </div>
 
