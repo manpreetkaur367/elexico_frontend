@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Send, Bot, User, CheckCircle2, Trash2, Pencil, Check, X, BookOpen } from "lucide-react";
+import { Sparkles, Send, Bot, User, CheckCircle2, Trash2, Pencil, Check, X, BookOpen, Volume2, Mic, MicOff } from "lucide-react";
 import type { Slide } from "../data/slides";
 import AISummaryPlayer from "./AISummaryPlayer";
+import { useTTS, useSTT, globalStop } from "../hooks/useSpeech";
 
 const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "") as string;
 
@@ -101,15 +102,40 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
   const [editText, setEditText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // ── TTS: one instance drives all audio in this panel ──
+  const [ttsText, setTtsText] = useState("");
+  const tts = useTTS(ttsText);
+
+  // ── STT: voice input ──
+  const stt = useSTT((transcript) => {
+    setInput(prev => (prev ? prev + " " + transcript : transcript));
+  });
+
+  // ── Smart audio switching: read a new piece of text, stopping whatever plays ──
+  const readAloud = (text: string) => {
+    globalStop();
+    setTtsText(text);
+    // speak on next tick after ttsText state updates
+    setTimeout(() => tts.speak(text), 60);
+  };
+
+  // Stop audio when slide changes
+  const prevSlideId = useRef(slide.id);
+  useEffect(() => {
+    if (prevSlideId.current !== slide.id) {
+      globalStop();
+      setTtsText("");
+      prevSlideId.current = slide.id;
+    }
+  }, [slide.id]);
+
   const uid = () => Math.random().toString(36).slice(2);
 
   // When switching slides, just switch to summary tab — messages are preserved
-  const prevSlideId = useRef(slide.id);
   useEffect(() => {
     if (prevSlideId.current !== slide.id) {
       setActiveTab("summary");
       setEditingId(null);
-      prevSlideId.current = slide.id;
     }
   }, [slide.id]);
 
@@ -127,6 +153,8 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
     const reply = await getAIResponse(text, slide);
     setMessages((prev) => [...prev, { id: uid(), role: "ai", text: reply }]);
     setIsTyping(false);
+    // Auto-read the AI reply
+    readAloud(reply);
   };
 
   const deleteMessage = (id: string) => {
@@ -145,9 +173,7 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
 
   const confirmEdit = async (id: string) => {
     if (!editText.trim()) return;
-    // Find index of the edited user message
     const idx = messages.findIndex((m) => m.id === id);
-    // Remove this message and everything after it (old AI reply), then resend
     setMessages((prev) => prev.slice(0, idx));
     setEditingId(null);
     setEditText("");
@@ -158,6 +184,41 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
     e.preventDefault();
     sendMessage(input);
   };
+
+  // ── TTS mini-controls (shown when audio is active) ──
+  const isAudioActive = tts.state === "playing" || tts.state === "paused";
+  const AudioBar = () => isAudioActive ? (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      className="flex items-center gap-2 px-4 py-2 mx-4 mb-1 rounded-xl"
+      style={{ background: "#eff6ff", border: "1px solid #bfdbfe" }}
+    >
+      {tts.state === "playing" && (
+        <div className="flex gap-0.5 items-end h-3">
+          {[0,1,2,3].map(i => (
+            <motion.div key={i}
+              animate={{ height: ["4px","10px","4px"] }}
+              transition={{ duration: 0.6, delay: i*0.12, repeat: Infinity }}
+              className="w-0.5 rounded-full bg-blue-500"
+            />
+          ))}
+        </div>
+      )}
+      <span className="text-[11px] font-bold text-blue-600 flex-1 truncate">
+        {tts.state === "playing" ? "Speaking…" : "Paused"}
+      </span>
+      <button onClick={tts.state === "playing" ? tts.pause : tts.play}
+        className="text-[10px] font-black text-blue-600 px-2 py-0.5 rounded-lg hover:bg-blue-100 transition-all">
+        {tts.state === "playing" ? "Pause" : "Resume"}
+      </button>
+      <button onClick={tts.stop}
+        className="text-[10px] font-black text-red-400 px-2 py-0.5 rounded-lg hover:bg-red-50 transition-all">
+        Stop
+      </button>
+    </motion.div>
+  ) : null;
 
   return (
     <div className="flex flex-col h-full" style={{ background: "#ffffff" }}>
@@ -229,6 +290,14 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
               <div className="flex items-center gap-2 mb-2.5">
                 <BookOpen className="w-3.5 h-3.5 text-blue-500" />
                 <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.14em]">What is it?</span>
+                <button
+                  onClick={() => readAloud(slide.description)}
+                  title="Read aloud"
+                  className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg transition-all text-[10px] font-bold"
+                  style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}
+                >
+                  <Volume2 className="w-3 h-3" /> Listen
+                </button>
               </div>
               <p className="text-[13px] text-gray-600 leading-relaxed">{slide.description}</p>
             </div>
@@ -238,6 +307,14 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
               <div className="flex items-center gap-2 mb-2.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
                 <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.14em]">Key Points</span>
+                <button
+                  onClick={() => readAloud(slide.keyPoints.join(". "))}
+                  title="Read key points aloud"
+                  className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg transition-all text-[10px] font-bold"
+                  style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}
+                >
+                  <Volume2 className="w-3 h-3" /> Listen
+                </button>
               </div>
               <ul className="space-y-2">
                 {slide.keyPoints.map((point, i) => (
@@ -385,6 +462,15 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
                             animate={{ opacity: hoveredId === msg.id ? 1 : 0 }}
                             className={`flex gap-1 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
                           >
+                            {/* Read aloud — AI messages only */}
+                            {msg.role === "ai" && (
+                              <button
+                                onClick={() => readAloud(msg.text)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all"
+                                style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
+                                <Volume2 className="w-2.5 h-2.5" /> Read
+                              </button>
+                            )}
                             {/* Edit — user messages only */}
                             {msg.role === "user" && (
                               <button
@@ -450,6 +536,8 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
       {/* ── Chat input (always visible) ── */}
       <div className="px-4 pb-5 pt-3.5 flex-shrink-0"
         style={{ borderTop: "1px solid #e8edf5" }}>
+        {/* Audio status bar */}
+        <AudioBar />
         <form onSubmit={handleSubmit} className="flex items-center gap-2.5">
           <input
             type="text"
@@ -467,6 +555,26 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
               e.target.style.background = "#f8faff";
             }}
           />
+          {/* Voice input button */}
+          {stt.supported && (
+            <motion.button
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+              type="button"
+              onClick={stt.listening ? stt.stop : stt.start}
+              title={stt.listening ? "Stop voice input" : "Voice input"}
+              className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+              style={{
+                background: stt.listening ? "#ef4444" : "#f1f5f9",
+                border: "1px solid #e2e8f0",
+                boxShadow: stt.listening ? "0 2px 12px #ef444455" : "none",
+              }}
+            >
+              {stt.listening
+                ? <MicOff className="w-4 h-4 text-white" />
+                : <Mic className="w-4 h-4 text-gray-500" />}
+            </motion.button>
+          )}
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}

@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play, Pause, RotateCcw, Sparkles, RefreshCw,
   Mic, Square, Hash,
 } from "lucide-react";
 import type { Slide } from "../data/slides";
+import { useTTS, globalStop } from "../hooks/useSpeech";
 
 /* ─── Gemini helpers (same key + rotation as AIInsightsPanel) ─── */
 const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "") as string;
@@ -150,89 +151,6 @@ async function generateSummary(slide: Slide, lines: number, temperature: number)
   return polished; // exactly `lines` sentences, guaranteed
 }
 
-/* ─── TTS hook ─── */
-type PlayerState = "idle" | "loading" | "playing" | "paused" | "done" | "error";
-
-function useTTS(text: string) {
-  const [state, setState] = useState<PlayerState>("idle");
-  const uttRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const [progress, setProgress] = useState(0); // 0-100
-
-  // Cancel on unmount
-  useEffect(() => () => { window.speechSynthesis.cancel(); }, []);
-
-  // Reset when text changes
-  useEffect(() => {
-    window.speechSynthesis.cancel();
-    setState("idle");
-    setProgress(0);
-    uttRef.current = null;
-  }, [text]);
-
-  const play = useCallback(() => {
-    if (!text) return;
-
-    // Resume from pause
-    if (state === "paused") {
-      window.speechSynthesis.resume();
-      setState("playing");
-      return;
-    }
-
-    // Fresh play
-    window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 0.95;
-    utt.pitch = 1.0;
-    utt.lang = "en-US";
-
-    // Pick a natural English voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(
-      (v) => v.lang.startsWith("en") && (v.name.includes("Google") || v.name.includes("Natural") || v.name.includes("Premium"))
-    ) ?? voices.find((v) => v.lang.startsWith("en")) ?? null;
-    if (preferred) utt.voice = preferred;
-
-    const words = text.split(/\s+/).length;
-    let wordIdx = 0;
-    utt.onboundary = (e) => {
-      if (e.name === "word") {
-        wordIdx++;
-        setProgress(Math.min(99, Math.round((wordIdx / words) * 100)));
-      }
-    };
-    utt.onend = () => { setState("done"); setProgress(100); };
-    utt.onerror = () => setState("error");
-
-    uttRef.current = utt;
-    window.speechSynthesis.speak(utt);
-    setState("playing");
-  }, [text, state]);
-
-  const pause = useCallback(() => {
-    window.speechSynthesis.pause();
-    setState("paused");
-  }, []);
-
-  const replay = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setState("idle");
-    setProgress(0);
-    uttRef.current = null;
-    // tiny delay so browser fully resets
-    setTimeout(() => play(), 80);
-  }, [play]);
-
-  const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setState("idle");
-    setProgress(0);
-    uttRef.current = null;
-  }, []);
-
-  return { state, progress, play, pause, replay, stop };
-}
-
 /* ─── Main component ─── */
 interface Props {
   slide: Slide;
@@ -278,6 +196,9 @@ export default function AISummaryPlayer({ slide }: Props) {
     try {
       const result = await generateSummary(slide, effectiveLines, effectiveTemp);
       setSentences(result); // always exactly `effectiveLines` items
+      // Auto-play the new summary — stop any other audio first
+      globalStop();
+      setTimeout(() => tts.speak(result.join(" ")), 120);
     } catch {
       setGenError("Couldn't generate summary. Please try again.");
     } finally {
@@ -495,8 +416,7 @@ export default function AISummaryPlayer({ slide }: Props) {
                 </div>
                 <div className="flex justify-between mt-1.5">
                   <span className="text-[10px] text-gray-400 font-semibold capitalize">
-                    {tts.state === "loading" ? "Loading…"
-                      : tts.state === "idle"    ? "Ready"
+                    {tts.state === "idle"    ? "Ready"
                       : tts.state === "playing" ? "Playing…"
                       : tts.state === "paused"  ? "Paused"
                       : tts.state === "done"    ? "Done"
