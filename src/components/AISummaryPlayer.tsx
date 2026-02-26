@@ -8,7 +8,7 @@ import type { Slide } from "../data/slides";
 import { useTTS } from "../hooks/useSpeech";
 
 /* ─── Backend API helper ─── */
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "https://elexico-backend-ye1c.onrender.com") as string;
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "https://elexcio-backend.onrender.com") as string;
 
 type SummaryLength = "short" | "medium" | "detailed" | "custom";
 

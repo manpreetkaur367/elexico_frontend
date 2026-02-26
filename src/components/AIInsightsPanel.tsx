@@ -5,7 +5,7 @@ import type { Slide } from "../data/slides";
 import AISummaryPlayer from "./AISummaryPlayer";
 import { useTTS, useSTT, globalStop } from "../hooks/useSpeech";
 
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "https://elexico-backend-ye1c.onrender.com") as string;
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "https://elexcio-backend.onrender.com") as string;
 
 // ── AI-generated summary for the Summary tab ──────────────────────────────
 async function getAISummaryData(slide: Slide): Promise<{ description: string; keyPoints: string[] }> {
