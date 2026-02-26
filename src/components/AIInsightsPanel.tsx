@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Send, Bot, User, CheckCircle2, Trash2, Pencil, Check, X, BookOpen, Volume2, Mic, MicOff } from "lucide-react";
+import { Sparkles, Send, Bot, User, CheckCircle2, Trash2, Pencil, Check, X, BookOpen, Volume2, Mic, MicOff, MessageCircle, Headphones, FileText, Pause, Play, Square } from "lucide-react";
 import type { Slide } from "../data/slides";
 import AISummaryPlayer from "./AISummaryPlayer";
 import { useTTS, useSTT, globalStop } from "../hooks/useSpeech";
@@ -185,171 +185,211 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
     sendMessage(input);
   };
 
-  // ── TTS mini-controls (shown when audio is active) ──
+  // ── TTS mini-controls bar ──
   const isAudioActive = tts.state === "playing" || tts.state === "paused";
   const AudioBar = () => isAudioActive ? (
     <motion.div
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -6 }}
-      className="flex items-center gap-2 px-4 py-2 mx-4 mb-1 rounded-xl"
-      style={{ background: "#eff6ff", border: "1px solid #bfdbfe" }}
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      className="mx-0 mb-2 overflow-hidden"
     >
-      {tts.state === "playing" && (
-        <div className="flex gap-0.5 items-end h-3">
-          {[0,1,2,3].map(i => (
+      <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl"
+        style={{ background: "linear-gradient(135deg, #eff6ff, #dbeafe)", border: "1px solid #bfdbfe" }}>
+        {/* Waveform animation */}
+        <div className="flex gap-0.5 items-end h-4 flex-shrink-0">
+          {[0,1,2,3,4].map(i => (
             <motion.div key={i}
-              animate={{ height: ["4px","10px","4px"] }}
-              transition={{ duration: 0.6, delay: i*0.12, repeat: Infinity }}
+              animate={tts.state === "playing"
+                ? { height: ["3px","12px","3px"] }
+                : { height: "5px" }}
+              transition={{ duration: 0.5, delay: i*0.1, repeat: tts.state === "playing" ? Infinity : 0 }}
               className="w-0.5 rounded-full bg-blue-500"
             />
           ))}
         </div>
-      )}
-      <span className="text-[11px] font-bold text-blue-600 flex-1 truncate">
-        {tts.state === "playing" ? "Speaking…" : "Paused"}
-      </span>
-      <button onClick={tts.state === "playing" ? tts.pause : tts.play}
-        className="text-[10px] font-black text-blue-600 px-2 py-0.5 rounded-lg hover:bg-blue-100 transition-all">
-        {tts.state === "playing" ? "Pause" : "Resume"}
-      </button>
-      <button onClick={tts.stop}
-        className="text-[10px] font-black text-red-400 px-2 py-0.5 rounded-lg hover:bg-red-50 transition-all">
-        Stop
-      </button>
+        <span className="text-[11px] font-bold text-blue-700 flex-1 truncate">
+          {tts.state === "playing" ? "Speaking…" : "⏸ Paused"}
+        </span>
+        <button onClick={tts.state === "playing" ? tts.pause : tts.play}
+          className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-blue-200"
+          style={{ background: "#dbeafe", color: "#2563eb" }}>
+          {tts.state === "playing"
+            ? <Pause className="w-3 h-3" />
+            : <Play className="w-3 h-3" />}
+        </button>
+        <button onClick={tts.stop}
+          className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-red-100"
+          style={{ background: "#fee2e2", color: "#ef4444" }}>
+          <Square className="w-3 h-3" />
+        </button>
+      </div>
     </motion.div>
   ) : null;
 
-  return (
-    <div className="flex flex-col h-full" style={{ background: "#ffffff" }}>
+  const TABS = [
+    { id: "summary" as const, label: "Summary", icon: FileText },
+    { id: "listen"  as const, label: "Listen",  icon: Headphones },
+    { id: "chat"    as const, label: "Chat",     icon: MessageCircle },
+  ];
 
-      {/* ── Header ── */}
-      <div className="px-5 pt-5 pb-4 flex-shrink-0 relative overflow-hidden"
-        style={{ borderBottom: "1px solid #e8edf5" }}>
-        {/* Blue glow behind header */}
-        <div className="absolute top-0 right-0 w-40 h-20 pointer-events-none"
-          style={{
-            background: "radial-gradient(circle, #2563eb18 0%, transparent 70%)",
-            transform: "translate(20%, -20%)",
-          }} />
+  return (
+    <div className="flex flex-col h-full" style={{ background: "#f8faff" }}>
+
+      {/* ══ HEADER ══ */}
+      <div className="px-5 pt-4 pb-3.5 flex-shrink-0 relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%)" }}>
+        {/* decorative blobs */}
+        <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full pointer-events-none opacity-20"
+          style={{ background: "radial-gradient(circle, #fff 0%, transparent 70%)" }} />
+        <div className="absolute bottom-0 left-0 w-20 h-12 pointer-events-none opacity-10"
+          style={{ background: "radial-gradient(circle, #fff 0%, transparent 70%)" }} />
+
         <div className="flex items-center gap-3 relative z-10">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{
-              background: "linear-gradient(135deg, #2563eb, #3b82f6)",
-              boxShadow: "0 4px 16px #2563eb50",
-            }}>
-            <Sparkles className="w-5 h-5 text-white" />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.25)" }}>
+            <Sparkles className="w-4.5 h-4.5 text-white" />
           </div>
-          <div>
-            <p className="text-[15px] font-black text-gray-900 tracking-tight">AI Insights</p>
-            <p className="text-[11px] text-gray-500 font-medium">Powered by ElexicoAI</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-black text-white tracking-tight leading-tight">AI Insights</p>
+            <p className="text-[10px] text-blue-200 font-semibold tracking-wide">Powered by ElexicoAI</p>
+          </div>
+          {/* Live indicator */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+            style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)" }}>
+            <motion.div
+              animate={{ opacity: [1, 0.2, 1] }}
+              transition={{ duration: 1.8, repeat: Infinity }}
+              className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span className="text-[9px] font-black text-white tracking-widest uppercase">Live</span>
+          </div>
+        </div>
+
+        {/* Slide title chip */}
+        <div className="mt-2.5 relative z-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full"
+            style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)" }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-300 flex-shrink-0" />
+            <span className="text-[11px] font-bold text-white/90 truncate max-w-[200px]">{slide.title}</span>
           </div>
         </div>
       </div>
 
-      {/* ── Tab switcher ── */}
-      <div className="flex px-4 pt-3.5 pb-2 gap-1.5 flex-shrink-0">
-        {(["summary", "listen", "chat"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className="flex-1 py-2 text-[12px] font-black rounded-xl capitalize transition-all tracking-wide items-center justify-center flex gap-1.5"
-            style={activeTab === tab
-              ? { background: "#2563eb1e", color: "#2563eb", borderColor: "#2563eb35", border: "1px solid" }
-              : { background: "transparent", color: "#94a3b8", borderColor: "transparent", border: "1px solid" }
+      {/* ══ TAB SWITCHER ══ */}
+      <div className="px-4 pt-3 pb-2 flex-shrink-0 flex gap-1.5"
+        style={{ background: "#f8faff", borderBottom: "1px solid #e8edf5" }}>
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <motion.button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            whileTap={{ scale: 0.95 }}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-black transition-all tracking-wide relative overflow-hidden"
+            style={activeTab === id
+              ? { background: "#2563eb", color: "#fff", boxShadow: "0 4px 14px #2563eb40" }
+              : { background: "#eef2f9", color: "#94a3b8" }
             }
           >
-            {tab === "listen" ? "🎧 Listen" : tab}
-            {tab === "chat" && messages.length > 0 && (
+            <Icon className="w-3.5 h-3.5" />
+            {label}
+            {id === "chat" && messages.length > 0 && (
               <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="px-1.5 py-0.5 rounded-full text-[9px] font-black"
-                style={{ background: "#2563eb", color: "#fff" }}>
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full text-[8px] font-black flex items-center justify-center"
+                style={{ background: activeTab === "chat" ? "rgba(255,255,255,0.3)" : "#2563eb", color: "#fff" }}>
                 {messages.filter(m => m.role === "ai").length}
               </motion.span>
             )}
-          </button>
+          </motion.button>
         ))}
       </div>
 
-      {/* ══ SUMMARY TAB ══ */}
+      {/* ══ TAB CONTENT ══ */}
       <AnimatePresence mode="wait">
+
+        {/* ── SUMMARY TAB ── */}
         {activeTab === "summary" && (
-          <motion.div
-            key="summary"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2 }}
-            className="flex-1 overflow-y-auto px-5 py-4 space-y-5 scrollbar-thin min-h-0"
+          <motion.div key="summary"
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0"
           >
-            {/* Description */}
-            <div>
-              <div className="flex items-center gap-2 mb-2.5">
-                <BookOpen className="w-3.5 h-3.5 text-blue-500" />
-                <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.14em]">What is it?</span>
-                <button
+            {/* What is it */}
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: "#fff", border: "1px solid #e8edf5", boxShadow: "0 2px 12px #2563eb08" }}>
+              <div className="flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: "1px solid #f1f5f9", background: "#f8faff" }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center"
+                    style={{ background: "#dbeafe" }}>
+                    <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                  </div>
+                  <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.12em]">What is it?</span>
+                </div>
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                   onClick={() => readAloud(slide.description)}
-                  title="Read aloud"
-                  className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg transition-all text-[10px] font-bold"
-                  style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}
-                >
-                  <Volume2 className="w-3 h-3" /> Listen
-                </button>
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold"
+                  style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
+                  <Volume2 className="w-2.5 h-2.5" /> Listen
+                </motion.button>
               </div>
-              <p className="text-[13px] text-gray-600 leading-relaxed">{slide.description}</p>
+              <div className="px-4 py-3">
+                <p className="text-[13px] text-gray-700 leading-[1.8]">{slide.description}</p>
+              </div>
             </div>
 
             {/* Key Points */}
-            <div>
-              <div className="flex items-center gap-2 mb-2.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.14em]">Key Points</span>
-                <button
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: "#fff", border: "1px solid #e8edf5", boxShadow: "0 2px 12px #2563eb08" }}>
+              <div className="flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: "1px solid #f1f5f9", background: "#f8faff" }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center"
+                    style={{ background: "#d1fae5" }}>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  </div>
+                  <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.12em]">Key Points</span>
+                </div>
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                   onClick={() => readAloud(slide.keyPoints.join(". "))}
-                  title="Read key points aloud"
-                  className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg transition-all text-[10px] font-bold"
-                  style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}
-                >
-                  <Volume2 className="w-3 h-3" /> Listen
-                </button>
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold"
+                  style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
+                  <Volume2 className="w-2.5 h-2.5" /> Listen
+                </motion.button>
               </div>
-              <ul className="space-y-2">
+              <div className="px-4 py-3 space-y-2.5">
                 {slide.keyPoints.map((point, i) => (
-                  <motion.li
-                    key={i}
-                    initial={{ opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.05 + i * 0.06 }}
-                    className="flex items-start gap-2.5">
-                    <div className="mt-[5px] w-4 h-4 rounded-md flex-shrink-0 flex items-center justify-center"
-                      style={{ background: "#2563eb16", border: "1px solid #2563eb28" }}>
-                      <span className="w-1.5 h-1.5 rounded-full block bg-blue-600" />
+                  <motion.div key={i}
+                    initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.04 + i * 0.055 }}
+                    className="flex items-start gap-3">
+                    <div className="mt-[5px] w-5 h-5 rounded-lg flex-shrink-0 flex items-center justify-center text-[10px] font-black text-blue-600"
+                      style={{ background: "#dbeafe", border: "1px solid #bfdbfe" }}>
+                      {i + 1}
                     </div>
-                    <p className="text-[13px] text-gray-600 leading-relaxed">{point}</p>
-                  </motion.li>
+                    <p className="text-[13px] text-gray-700 leading-relaxed flex-1">{point}</p>
+                  </motion.div>
                 ))}
-              </ul>
+              </div>
             </div>
 
-            {/* Ask AI suggestions */}
+            {/* Ask AI */}
             <div>
-              <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.14em] mb-2.5">Ask AI</p>
+              <div className="flex items-center gap-2 mb-2.5 px-1">
+                <div className="h-[2px] w-4 rounded-full bg-blue-400" />
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.14em]">Ask AI</span>
+                <div className="h-[2px] flex-1 rounded-full bg-gray-100" />
+              </div>
               <div className="flex flex-col gap-2">
                 {slide.chatSuggestions.map((s, i) => (
-                  <motion.button
-                    key={i}
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.15 + i * 0.06 }}
-                    whileHover={{ x: 3 }}
+                  <motion.button key={i}
+                    initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 + i * 0.055 }}
+                    whileHover={{ x: 4, background: "#2563eb", color: "#fff" }}
                     onClick={() => sendMessage(s)}
-                    className="text-left text-[12px] px-4 py-2.5 rounded-xl transition-all border font-medium"
-                    style={{ color: "#2563eb", borderColor: "#2563eb20", background: "#2563eb08" }}
-                  >
-                    → {s}
+                    className="text-left text-[12px] px-4 py-2.5 rounded-xl transition-all font-semibold flex items-center gap-2.5"
+                    style={{ color: "#2563eb", border: "1.5px solid #bfdbfe", background: "#eff6ff" }}>
+                    <span className="text-[10px] opacity-60">→</span>
+                    {s}
                   </motion.button>
                 ))}
               </div>
@@ -357,89 +397,88 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
           </motion.div>
         )}
 
-        {/* ══ LISTEN TAB ══ */}
+        {/* ── LISTEN TAB ── */}
         {activeTab === "listen" && (
-          <motion.div
-            key="listen"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2 }}
-            className="flex-1 overflow-y-auto scrollbar-thin min-h-0"
-          >
+          <motion.div key="listen"
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="flex-1 overflow-y-auto min-h-0">
             <AISummaryPlayer slide={slide} />
           </motion.div>
         )}
 
-        {/* ══ CHAT TAB ══ */}
+        {/* ── CHAT TAB ── */}
         {activeTab === "chat" && (
-          <motion.div
-            key="chat"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2 }}
-            className="flex-1 flex flex-col min-h-0"
-          >
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 scrollbar-thin min-h-0">
+          <motion.div key="chat"
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="flex-1 flex flex-col min-h-0">
+
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
+              {/* Empty state */}
               {messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full gap-4 opacity-50">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                    style={{ background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
-                    <Bot className="w-7 h-7 text-gray-400" />
+                <div className="flex flex-col items-center justify-center h-full gap-5 py-8">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                    style={{ background: "linear-gradient(135deg, #eff6ff, #dbeafe)", border: "1px solid #bfdbfe" }}>
+                    <Bot className="w-8 h-8 text-blue-400" />
                   </div>
-                  <p className="text-sm text-gray-500 text-center leading-relaxed">
-                    Ask me anything about<br />
-                    <span className="text-gray-700 font-bold">{slide.title}</span>
-                  </p>
+                  <div className="text-center">
+                    <p className="text-[14px] font-bold text-gray-700">Ask me anything!</p>
+                    <p className="text-[12px] text-gray-400 mt-1">About <span className="font-semibold text-blue-500">{slide.title}</span> or anything else</p>
+                  </div>
+                  {/* Suggestion chips in chat empty state */}
+                  <div className="w-full flex flex-col gap-2 mt-1">
+                    {slide.chatSuggestions.map((s, i) => (
+                      <motion.button key={i}
+                        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.05 + i * 0.07 }}
+                        whileHover={{ scale: 1.01 }}
+                        onClick={() => sendMessage(s)}
+                        className="text-left text-[12px] px-4 py-2.5 rounded-xl font-semibold flex items-center gap-2"
+                        style={{ color: "#2563eb", border: "1.5px solid #bfdbfe", background: "#eff6ff" }}>
+                        <span className="opacity-50">→</span> {s}
+                      </motion.button>
+                    ))}
+                  </div>
                 </div>
               )}
 
               <AnimatePresence>
                 {messages.map((msg) => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.22 }}
-                    className={`flex gap-2.5 group ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+                  <motion.div key={msg.id}
+                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.94 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
                     onMouseEnter={() => setHoveredId(msg.id)}
-                    onMouseLeave={() => { setHoveredId(null); }}
+                    onMouseLeave={() => setHoveredId(null)}
                   >
                     {/* Avatar */}
-                    <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center mt-1"
+                    <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5"
                       style={msg.role === "ai"
-                        ? { background: "#2563eb22", border: "1px solid #2563eb30" }
-                        : { background: "#2563eb" }}>
+                        ? { background: "linear-gradient(135deg, #dbeafe, #eff6ff)", border: "1.5px solid #bfdbfe" }
+                        : { background: "linear-gradient(135deg, #2563eb, #3b82f6)" }}>
                       {msg.role === "user"
                         ? <User className="w-3.5 h-3.5 text-white" />
                         : <Bot className="w-3.5 h-3.5 text-blue-600" />}
                     </div>
 
-                    {/* Bubble + action buttons */}
-                    <div className={`flex flex-col gap-1 max-w-[82%] ${msg.role === "user" ? "items-end" : "items-start"}`}>
-
-                      {/* Edit mode for user messages */}
+                    <div className={`flex flex-col gap-1.5 max-w-[82%] ${msg.role === "user" ? "items-end" : "items-start"}`}>
                       {editingId === msg.id ? (
                         <div className="flex flex-col gap-2 w-full">
-                          <textarea
-                            autoFocus
-                            value={editText}
+                          <textarea autoFocus value={editText}
                             onChange={(e) => setEditText(e.target.value)}
                             rows={3}
                             className="text-[13px] px-3 py-2 rounded-xl outline-none resize-none w-full"
-                            style={{ background: "#fff", border: "2px solid #2563eb", color: "#1e293b", minWidth: "180px" }}
-                          />
+                            style={{ background: "#fff", border: "2px solid #2563eb", color: "#1e293b", minWidth: "180px" }} />
                           <div className="flex gap-1.5 justify-end">
                             <button onClick={cancelEdit}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all"
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold"
                               style={{ background: "#f1f5f9", color: "#64748b" }}>
                               <X className="w-3 h-3" /> Cancel
                             </button>
                             <button onClick={() => confirmEdit(msg.id)}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all"
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold"
                               style={{ background: "#2563eb", color: "#fff" }}>
                               <Check className="w-3 h-3" /> Send
                             </button>
@@ -447,43 +486,38 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
                         </div>
                       ) : (
                         <>
-                          <div className={`px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed border ${
+                          <div className={`px-4 py-2.5 text-[13px] leading-relaxed ${
                             msg.role === "user"
-                              ? "bg-blue-600 text-white rounded-tr-sm border-transparent"
-                              : "rounded-tl-sm text-gray-700"
+                              ? "text-white rounded-2xl rounded-tr-sm"
+                              : "text-gray-700 rounded-2xl rounded-tl-sm"
                           }`}
-                            style={msg.role === "ai" ? { background: "#f1f5f9", borderColor: "#e2e8f0" } : {}}>
+                            style={msg.role === "user"
+                              ? { background: "linear-gradient(135deg, #2563eb, #3b82f6)", boxShadow: "0 4px 14px #2563eb30" }
+                              : { background: "#fff", border: "1px solid #e8edf5", boxShadow: "0 2px 8px #0000000a" }}>
                             {msg.text}
                           </div>
 
-                          {/* Action buttons — appear on hover */}
+                          {/* Hover actions */}
                           <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: hoveredId === msg.id ? 1 : 0 }}
-                            className={`flex gap-1 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
-                          >
-                            {/* Read aloud — AI messages only */}
+                            className={`flex gap-1 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
                             {msg.role === "ai" && (
-                              <button
-                                onClick={() => readAloud(msg.text)}
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all"
+                              <button onClick={() => readAloud(msg.text)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold"
                                 style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
                                 <Volume2 className="w-2.5 h-2.5" /> Read
                               </button>
                             )}
-                            {/* Edit — user messages only */}
                             {msg.role === "user" && (
-                              <button
-                                onClick={() => startEdit(msg)}
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all"
+                              <button onClick={() => startEdit(msg)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold"
                                 style={{ background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe" }}>
                                 <Pencil className="w-2.5 h-2.5" /> Edit
                               </button>
                             )}
-                            {/* Delete — all messages */}
-                            <button
-                              onClick={() => deleteMessage(msg.id)}
-                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all"
+                            <button onClick={() => deleteMessage(msg.id)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold"
                               style={{ background: "#fff1f2", color: "#e11d48", border: "1px solid #fecdd3" }}>
                               <Trash2 className="w-2.5 h-2.5" /> Delete
                             </button>
@@ -495,163 +529,128 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
                 ))}
               </AnimatePresence>
 
+              {/* Typing indicator */}
               {isTyping && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2.5 items-center">
+                <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  className="flex gap-2.5 items-end">
                   <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center"
-                    style={{ background: "#2563eb22", border: "1px solid #2563eb30" }}>
-                    <Bot className="w-3.5 h-3.5 text-blue-600" />
+                    style={{ background: "linear-gradient(135deg, #dbeafe, #eff6ff)", border: "1.5px solid #bfdbfe" }}>
+                    <Bot className="w-3.5 h-3.5 text-blue-500" />
                   </div>
-                  <div className="px-4 py-3 rounded-2xl rounded-tl-sm flex items-center gap-1.5 border"
-                    style={{ background: "#f1f5f9", borderColor: "#e2e8f0" }}>
-                    {[0, 1, 2].map((j) => (
+                  <div className="px-4 py-3 rounded-2xl rounded-tl-sm flex items-center gap-1.5"
+                    style={{ background: "#fff", border: "1px solid #e8edf5", boxShadow: "0 2px 8px #0000000a" }}>
+                    {[0,1,2].map(j => (
                       <motion.div key={j}
-                        animate={{ y: [0, -4, 0] }}
-                        transition={{ duration: 0.6, delay: j * 0.15, repeat: Infinity }}
-                        className="w-2 h-2 rounded-full"
-                        style={{ background: "#2563eb" }} />
+                        animate={{ y: [0, -5, 0], background: ["#94a3b8","#2563eb","#94a3b8"] }}
+                        transition={{ duration: 0.7, delay: j * 0.15, repeat: Infinity }}
+                        className="w-2 h-2 rounded-full" style={{ background: "#94a3b8" }} />
                     ))}
                   </div>
                 </motion.div>
               )}
               <div ref={messagesEndRef} />
             </div>
-
-            {/* Suggestion chips */}
-            {messages.length === 0 && (
-              <div className="px-5 pb-3 flex flex-col gap-2 flex-shrink-0">
-                {slide.chatSuggestions.map((s, i) => (
-                  <motion.button key={i} whileHover={{ x: 2 }}
-                    onClick={() => sendMessage(s)}
-                    className="text-left text-[12px] px-4 py-2.5 rounded-xl border transition-all font-medium"
-                    style={{ color: "#2563eb", borderColor: "#2563eb25", background: "#2563eb0a" }}>
-                    → {s}
-                  </motion.button>
-                ))}
-              </div>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Chat input (always visible) ── */}
-      <div className="px-4 pb-5 pt-3.5 flex-shrink-0"
-        style={{ borderTop: "1px solid #e8edf5" }}>
-        {/* Audio status bar */}
-        <AudioBar />
+      {/* ══ INPUT AREA (always visible) ══ */}
+      <div className="flex-shrink-0 px-4 pb-4 pt-3"
+        style={{ borderTop: "1px solid #e8edf5", background: "#f8faff" }}>
 
-        {/* STT error banner */}
+        {/* Audio bar */}
+        <AnimatePresence>{isAudioActive && <AudioBar />}</AnimatePresence>
+
+        {/* STT error */}
         <AnimatePresence>
           {stt.error && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              className="mx-4 mb-2 px-3 py-2 rounded-xl text-[11px] font-bold flex items-center gap-2"
-              style={{ background: "#fff1f2", color: "#e11d48", border: "1px solid #fecdd3" }}
-            >
-              <span className="text-[13px]">
-                {stt.error === "not-allowed" ? "🔒" : stt.error === "no-speech" ? "🎤" : "⚠️"}
-              </span>
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="mb-2 px-3 py-2 rounded-xl text-[11px] font-bold flex items-center gap-2"
+              style={{ background: "#fff1f2", color: "#e11d48", border: "1px solid #fecdd3" }}>
+              <span>{stt.error === "not-allowed" ? "🔒" : stt.error === "no-speech" ? "🎤" : "⚠️"}</span>
               {stt.error === "not-allowed"
-                ? "Microphone access denied. Please allow microphone in browser settings."
+                ? "Mic access denied — allow in browser settings."
                 : stt.error === "no-speech"
-                ? "No speech detected. Try speaking louder or closer."
-                : "Microphone error. Please try again."}
+                ? "No speech detected — try again."
+                : "Microphone error — try again."}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* STT interim live preview */}
+        {/* STT live preview */}
         <AnimatePresence>
           {stt.listening && stt.interim && (
-            <motion.div
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="mx-4 mb-2 px-3 py-2 rounded-xl text-[12px] italic flex items-center gap-2"
-              style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
-            >
-              <motion.span
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ duration: 0.8, repeat: Infinity }}
-                className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"
-              />
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="mb-2 px-3 py-2 rounded-xl text-[12px] italic flex items-center gap-2"
+              style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
+              <motion.span animate={{ opacity: [1, 0.2, 1] }} transition={{ duration: 0.8, repeat: Infinity }}
+                className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
               {stt.interim}…
             </motion.div>
           )}
         </AnimatePresence>
 
-        <form onSubmit={handleSubmit} className="flex items-center gap-2.5">
+        <form onSubmit={handleSubmit} className="flex items-center gap-2">
+          {/* Input */}
           <div className="flex-1 relative">
-            <input
-              type="text"
-              value={input}
+            <input type="text" value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={stt.listening ? "Listening… speak now" : `Ask about ${slide.title}...`}
-              className="w-full text-[13px] px-4 py-3 rounded-xl outline-none transition-all placeholder-gray-400 text-gray-800 font-medium"
+              placeholder={stt.listening ? "🎤 Listening…" : `Ask about ${slide.title}…`}
+              className="w-full text-[13px] px-4 py-3 rounded-2xl outline-none transition-all font-medium"
               style={{
-                background: stt.listening ? "#fef2f2" : "#f8faff",
-                border: `1px solid ${stt.listening ? "#fca5a5" : "#e2e8f0"}`,
+                background: stt.listening ? "#fef2f2" : "#fff",
+                border: `1.5px solid ${stt.listening ? "#fca5a5" : "#e2e8f0"}`,
+                boxShadow: "0 2px 8px #00000008",
+                color: "#1e293b",
               }}
               onFocus={(e) => {
-                if (!stt.listening) {
-                  e.target.style.borderColor = "#2563eb50";
-                  e.target.style.background = "#ffffff";
-                }
+                if (!stt.listening) e.target.style.borderColor = "#2563eb60";
               }}
               onBlur={(e) => {
-                if (!stt.listening) {
-                  e.target.style.borderColor = "#e2e8f0";
-                  e.target.style.background = "#f8faff";
-                }
+                if (!stt.listening) e.target.style.borderColor = "#e2e8f0";
               }}
             />
           </div>
 
-          {/* Voice input button */}
+          {/* Mic button */}
           {stt.supported && (
-            <motion.button
-              whileHover={{ scale: 1.08 }}
-              whileTap={{ scale: 0.92 }}
+            <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}
               type="button"
               onClick={stt.listening ? stt.stop : stt.start}
-              title={stt.listening ? "Stop recording" : "Speak your question"}
-              className="relative w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+              title={stt.listening ? "Stop recording" : "Voice input"}
+              className="relative w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{
                 background: stt.listening
                   ? "linear-gradient(135deg, #ef4444, #dc2626)"
-                  : "#f1f5f9",
-                border: `1px solid ${stt.listening ? "#ef444440" : "#e2e8f0"}`,
-                boxShadow: stt.listening ? "0 2px 16px #ef444460" : "none",
-              }}
-            >
-              {/* Pulse ring when active */}
+                  : "#fff",
+                border: `1.5px solid ${stt.listening ? "transparent" : "#e2e8f0"}`,
+                boxShadow: stt.listening ? "0 4px 16px #ef444450" : "0 2px 8px #00000008",
+              }}>
               {stt.listening && (
                 <motion.span
-                  animate={{ scale: [1, 1.6, 1], opacity: [0.6, 0, 0.6] }}
-                  transition={{ duration: 1.2, repeat: Infinity }}
-                  className="absolute inset-0 rounded-xl"
-                  style={{ background: "#ef444430" }}
-                />
+                  animate={{ scale: [1, 1.7, 1], opacity: [0.5, 0, 0.5] }}
+                  transition={{ duration: 1.1, repeat: Infinity }}
+                  className="absolute inset-0 rounded-2xl"
+                  style={{ background: "#ef444428" }} />
               )}
               {stt.listening
                 ? <MicOff className="w-4 h-4 text-white relative z-10" />
-                : <Mic className="w-4 h-4 text-gray-500" />}
+                : <Mic className="w-4 h-4 text-gray-400" />}
             </motion.button>
           )}
 
-          <motion.button
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.92 }}
+          {/* Send button */}
+          <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}
             type="submit"
             disabled={!input.trim() || isTyping}
-            className="w-11 h-11 rounded-xl flex items-center justify-center disabled:opacity-25 transition-all flex-shrink-0"
+            className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 disabled:opacity-30 transition-all"
             style={{
-              background: "linear-gradient(135deg, #2563eb, #3b82f6)",
-              boxShadow: "0 2px 14px #2563eb35",
-            }}
-          >
-            <Send className="w-4 h-4 text-white" />
+              background: input.trim()
+                ? "linear-gradient(135deg, #2563eb, #3b82f6)"
+                : "#e2e8f0",
+              boxShadow: input.trim() ? "0 4px 16px #2563eb40" : "none",
+            }}>
+            <Send className={`w-4 h-4 ${input.trim() ? "text-white" : "text-gray-400"}`} />
           </motion.button>
         </form>
       </div>
