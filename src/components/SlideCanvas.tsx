@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Server, HardDrive, Zap, Database, Lock, Code2, ArrowLeftRight, Radio,
-  type LucideIcon,
+  type LucideIcon, BookOpen,
 } from "lucide-react";
 import type { Slide } from "../data/slides";
+import DeepDiveModal from "./DeepDiveModal";
 
 const iconMap: Record<string, LucideIcon> = {
   Server, HardDrive, Zap, Database, Lock, Code2, ArrowLeftRight, Radio,
@@ -15,6 +17,7 @@ interface SlideCanvasProps {
 
 export default function SlideCanvas({ slide }: SlideCanvasProps) {
   const IconComponent = iconMap[slide.icon] ?? Server;
+  const [modalOpen, setModalOpen] = useState(false);
 
   return (
     <div className="w-full h-full rounded-2xl overflow-hidden flex flex-col md:flex-row"
@@ -180,8 +183,37 @@ export default function SlideCanvas({ slide }: SlideCanvasProps) {
             </div>
           </motion.div>
 
+          {/* View More button */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.62, duration: 0.35 }}>
+            <motion.button
+              onClick={() => setModalOpen(true)}
+              whileHover={{ scale: 1.02, y: -1 }}
+              whileTap={{ scale: 0.97 }}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl font-black text-[13px] tracking-wide transition-all"
+              style={{
+                background: "linear-gradient(135deg, #2563eb14 0%, #3b82f614 100%)",
+                border: "1px solid #2563eb30",
+                color: "#2563eb",
+                boxShadow: "0 2px 12px #2563eb12",
+              }}
+            >
+              <BookOpen className="w-4 h-4" />
+              View More Details
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full"
+                style={{ background: "#2563eb", color: "#fff" }}>
+                Deep Dive
+              </span>
+            </motion.button>
+          </motion.div>
+
         </div>
       </div>
+
+      {/* Deep Dive Modal */}
+      <DeepDiveModal slide={slide} isOpen={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
   );
 }

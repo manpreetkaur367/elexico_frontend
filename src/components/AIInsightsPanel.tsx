@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Send, Bot, User, CheckCircle2, Trash2, Pencil, Check, X, BookOpen, Volume2, Mic, MicOff, ChevronDown, Lightbulb, Globe, Layers } from "lucide-react";
+import { Sparkles, Send, Bot, User, CheckCircle2, Trash2, Pencil, Check, X, BookOpen, Volume2, Mic, MicOff } from "lucide-react";
 import type { Slide } from "../data/slides";
 import AISummaryPlayer from "./AISummaryPlayer";
 import { useTTS, useSTT, globalStop } from "../hooks/useSpeech";
@@ -100,7 +100,6 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-  const [showMore, setShowMore] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── TTS: one instance drives all audio in this panel ──
@@ -126,7 +125,6 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
     if (prevSlideId.current !== slide.id) {
       globalStop();
       setTtsText("");
-      setShowMore(false);
       prevSlideId.current = slide.id;
     }
   }, [slide.id]);
@@ -334,96 +332,6 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
                   </motion.li>
                 ))}
               </ul>
-            </div>
-
-            {/* ── View More ── */}
-            <div>
-              <motion.button
-                onClick={() => setShowMore(v => !v)}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
-                style={{
-                  background: showMore ? "#2563eb10" : "#f8faff",
-                  border: "1px solid",
-                  borderColor: showMore ? "#2563eb35" : "#e8edf5",
-                  color: "#2563eb",
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Layers className="w-3.5 h-3.5" />
-                  <span className="text-[12px] font-black tracking-wide">
-                    {showMore ? "Show Less" : "View More Details"}
-                  </span>
-                </div>
-                <motion.div animate={{ rotate: showMore ? 180 : 0 }} transition={{ duration: 0.25 }}>
-                  <ChevronDown className="w-4 h-4" />
-                </motion.div>
-              </motion.button>
-
-              <AnimatePresence>
-                {showMore && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="overflow-hidden"
-                  >
-                    <div className="pt-4 space-y-5">
-
-                      {/* Real World Example */}
-                      <div className="rounded-xl p-4" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
-                        <div className="flex items-center gap-2 mb-2.5">
-                          <Globe className="w-3.5 h-3.5 text-green-600" />
-                          <span className="text-[11px] font-black text-green-700 uppercase tracking-[0.14em]">Real World Example</span>
-                          <button
-                            onClick={() => readAloud(slide.realWorldExample)}
-                            className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all"
-                            style={{ background: "#dcfce7", color: "#16a34a", border: "1px solid #bbf7d0" }}
-                          >
-                            <Volume2 className="w-3 h-3" /> Listen
-                          </button>
-                        </div>
-                        <p className="text-[13px] text-green-800 leading-relaxed">{slide.realWorldExample}</p>
-                      </div>
-
-                      {/* Deep Dive */}
-                      <div className="rounded-xl p-4" style={{ background: "#eff6ff", border: "1px solid #bfdbfe" }}>
-                        <div className="flex items-center gap-2 mb-2.5">
-                          <Layers className="w-3.5 h-3.5 text-blue-600" />
-                          <span className="text-[11px] font-black text-blue-700 uppercase tracking-[0.14em]">Deep Dive</span>
-                          <button
-                            onClick={() => readAloud(slide.deepDive)}
-                            className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all"
-                            style={{ background: "#dbeafe", color: "#2563eb", border: "1px solid #bfdbfe" }}
-                          >
-                            <Volume2 className="w-3 h-3" /> Listen
-                          </button>
-                        </div>
-                        <p className="text-[13px] text-blue-900 leading-relaxed whitespace-pre-line">{slide.deepDive}</p>
-                      </div>
-
-                      {/* AI Insight */}
-                      <div className="rounded-xl p-4" style={{ background: "#fefce8", border: "1px solid #fde68a" }}>
-                        <div className="flex items-center gap-2 mb-2.5">
-                          <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                          <span className="text-[11px] font-black text-amber-700 uppercase tracking-[0.14em]">AI Insight</span>
-                          <button
-                            onClick={() => readAloud(slide.aiInsight)}
-                            className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all"
-                            style={{ background: "#fef3c7", color: "#d97706", border: "1px solid #fde68a" }}
-                          >
-                            <Volume2 className="w-3 h-3" /> Listen
-                          </button>
-                        </div>
-                        <p className="text-[13px] text-amber-900 leading-relaxed italic">"{slide.aiInsight}"</p>
-                      </div>
-
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
 
             {/* Ask AI suggestions */}
