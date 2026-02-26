@@ -167,19 +167,23 @@ export default function Dashboard({ onExit }: DashboardProps) {
       {/* ════════════ HEADER ════════════ */}
       <header className="relative flex-shrink-0 flex items-center px-5 gap-4"
         style={{
-          height: "56px",
-          background: "#ffffff",
-          borderBottom: "1px solid #e8edf5",
-          boxShadow: "0 1px 12px rgba(37,99,235,0.06), 0 1px 0 rgba(0,0,0,0.04)",
+          height: "60px",
+          background: "linear-gradient(180deg, #ffffff 0%, #f8faff 100%)",
+          borderBottom: "1px solid #e0e9ff",
+          boxShadow: "0 2px 20px rgba(37,99,235,0.08), 0 1px 0 rgba(37,99,235,0.05)",
         }}>
 
-        {/* Bottom accent line */}
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none"
-          style={{ background: "linear-gradient(to right, #2563eb, #3b82f6, #2563eb)" }} />
+        {/* Bottom accent line — animated gradient */}
+        <motion.div
+          animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
+          transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+          className="absolute bottom-0 left-0 right-0 h-[2.5px] pointer-events-none"
+          style={{ background: "linear-gradient(90deg, #1d4ed8, #2563eb, #3b82f6, #60a5fa, #2563eb, #1d4ed8)", backgroundSize: "300% 100%" }}
+        />
 
-        {/* Center top glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-14 pointer-events-none"
-          style={{ background: "radial-gradient(ellipse at 50% -10%, #2563eb0e 0%, transparent 70%)" }} />
+        {/* Top center glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-16 pointer-events-none"
+          style={{ background: "radial-gradient(ellipse at 50% -20%, #2563eb12 0%, transparent 65%)" }} />
 
         {/* ── Mobile left toggle ── */}
         <button onClick={() => setLeftOpen((o) => !o)}
@@ -192,10 +196,9 @@ export default function Dashboard({ onExit }: DashboardProps) {
           <div className="w-8 h-8 rounded-xl flex items-center justify-center relative overflow-hidden"
             style={{
               background: "linear-gradient(135deg, #1d4ed8 0%, #2563eb 60%, #3b82f6 100%)",
-              boxShadow: "0 2px 10px #2563eb45, 0 0 0 1px rgba(255,255,255,0.15) inset",
+              boxShadow: "0 3px 12px #2563eb50, 0 0 0 1px rgba(255,255,255,0.15) inset",
             }}>
             <span className="text-white font-black text-[13px] relative z-10 leading-none">E</span>
-            {/* Shine */}
             <div className="absolute top-0 left-0 right-0 h-1/2 rounded-t-xl"
               style={{ background: "rgba(255,255,255,0.18)" }} />
           </div>
@@ -210,15 +213,20 @@ export default function Dashboard({ onExit }: DashboardProps) {
 
         {/* ── Module badge ── */}
         <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
-          <span className="inline-flex items-center gap-1.5 text-[10.5px] font-black px-3 py-1.5 rounded-full border tracking-widest uppercase text-blue-600"
-            style={{ borderColor: "#2563eb30", background: "#2563eb0a" }}>
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+          <motion.span
+            whileHover={{ scale: 1.04 }}
+            className="inline-flex items-center gap-1.5 text-[10.5px] font-black px-3 py-1.5 rounded-full border tracking-widest uppercase"
+            style={{ color: "#2563eb", borderColor: "#2563eb35", background: "linear-gradient(135deg, #eff6ff, #dbeafe)" }}>
+            <motion.span
+              animate={{ opacity: [1, 0.3, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
             Backend Engineering
-          </span>
+          </motion.span>
         </div>
 
         {/* ── Center: slide stepper ── */}
-        <div className="flex-1 flex items-center justify-center gap-1 min-w-0">
+        <div className="flex-1 flex items-center justify-center gap-1.5 min-w-0">
           {slides.map((s, i) => (
             <button
               key={i}
@@ -228,7 +236,7 @@ export default function Dashboard({ onExit }: DashboardProps) {
             >
               <motion.div
                 animate={{
-                  width: i === current ? 28 : i < current ? 8 : 6,
+                  width: i === current ? 32 : i < current ? 10 : 7,
                   background: i === current
                     ? "#2563eb"
                     : i < current
@@ -238,16 +246,16 @@ export default function Dashboard({ onExit }: DashboardProps) {
                 }}
                 transition={{ type: "spring", stiffness: 500, damping: 35 }}
                 className="h-[5px] rounded-full"
-                style={i === current ? { boxShadow: "0 0 10px #2563eb80" } : {}}
+                style={i === current ? { boxShadow: "0 0 12px #2563eb90" } : {}}
               />
               {/* Tooltip */}
-              <div className="absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-50">
-                <div className="bg-gray-900 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-xl">
+              <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-50">
+                <div className="text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-xl"
+                  style={{ background: "linear-gradient(135deg, #1e3a8a, #1d4ed8)" }}>
                   <span className="text-blue-300 mr-1">{String(i + 1).padStart(2, "0")}.</span>
                   {s.title}
-                  {/* Arrow */}
                   <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0"
-                    style={{ borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "4px solid #111827" }} />
+                    style={{ borderLeft: "4px solid transparent", borderRight: "4px solid transparent", borderTop: "4px solid #1d4ed8" }} />
                 </div>
               </div>
             </button>
@@ -255,13 +263,13 @@ export default function Dashboard({ onExit }: DashboardProps) {
         </div>
 
         {/* ── Slide counter chip ── */}
-        <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 rounded-xl"
-          style={{ background: "#f8faff", border: "1px solid #e8edf5" }}>
-          <span className="text-[13px] font-black tabular-nums text-blue-600 leading-none">
+        <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0 px-3.5 py-1.5 rounded-xl"
+          style={{ background: "linear-gradient(135deg, #eff6ff, #dbeafe)", border: "1px solid #bfdbfe" }}>
+          <span className="text-[14px] font-black tabular-nums text-blue-600 leading-none">
             {String(current + 1).padStart(2, "0")}
           </span>
-          <span className="text-[11px] text-gray-300 font-bold leading-none">/</span>
-          <span className="text-[11px] font-bold tabular-nums text-gray-400 leading-none">
+          <span className="text-[11px] text-blue-300 font-bold leading-none">/</span>
+          <span className="text-[12px] font-bold tabular-nums text-blue-400 leading-none">
             {String(slides.length).padStart(2, "0")}
           </span>
         </div>
@@ -279,10 +287,10 @@ export default function Dashboard({ onExit }: DashboardProps) {
 
           {/* Exit */}
           <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.96 }}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onExit}
-            className="hidden sm:flex items-center gap-1.5 text-[12px] font-bold px-3.5 py-1.5 rounded-xl transition-all duration-200 border"
+            className="hidden sm:flex items-center gap-1.5 text-[12px] font-bold px-4 py-2 rounded-xl transition-all duration-200 border"
             style={{
               color: "#6b7280",
               background: "#f9fafb",
@@ -292,11 +300,13 @@ export default function Dashboard({ onExit }: DashboardProps) {
               (e.currentTarget as HTMLButtonElement).style.color = "#ef4444";
               (e.currentTarget as HTMLButtonElement).style.background = "#fef2f2";
               (e.currentTarget as HTMLButtonElement).style.borderColor = "#fecaca";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 12px #ef444430";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLButtonElement).style.color = "#6b7280";
               (e.currentTarget as HTMLButtonElement).style.background = "#f9fafb";
               (e.currentTarget as HTMLButtonElement).style.borderColor = "#e5e7eb";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
             }}
           >
             <LogOut className="w-3.5 h-3.5" />
