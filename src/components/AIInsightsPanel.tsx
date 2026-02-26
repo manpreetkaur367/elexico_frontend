@@ -538,23 +538,76 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
         style={{ borderTop: "1px solid #e8edf5" }}>
         {/* Audio status bar */}
         <AudioBar />
+
+        {/* STT error banner */}
+        <AnimatePresence>
+          {stt.error && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="mx-4 mb-2 px-3 py-2 rounded-xl text-[11px] font-bold flex items-center gap-2"
+              style={{ background: "#fff1f2", color: "#e11d48", border: "1px solid #fecdd3" }}
+            >
+              <span className="text-[13px]">
+                {stt.error === "not-allowed" ? "🔒" : stt.error === "no-speech" ? "🎤" : "⚠️"}
+              </span>
+              {stt.error === "not-allowed"
+                ? "Microphone access denied. Please allow microphone in browser settings."
+                : stt.error === "no-speech"
+                ? "No speech detected. Try speaking louder or closer."
+                : "Microphone error. Please try again."}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* STT interim live preview */}
+        <AnimatePresence>
+          {stt.listening && stt.interim && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mx-4 mb-2 px-3 py-2 rounded-xl text-[12px] italic flex items-center gap-2"
+              style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
+            >
+              <motion.span
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 0.8, repeat: Infinity }}
+                className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"
+              />
+              {stt.interim}…
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <form onSubmit={handleSubmit} className="flex items-center gap-2.5">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask about ${slide.title}...`}
-            className="flex-1 text-[13px] px-4 py-3 rounded-xl outline-none transition-all placeholder-gray-400 text-gray-800 font-medium"
-            style={{ background: "#f8faff", border: "1px solid #e2e8f0" }}
-            onFocus={(e) => {
-              e.target.style.borderColor = "#2563eb50";
-              e.target.style.background = "#ffffff";
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = "#e2e8f0";
-              e.target.style.background = "#f8faff";
-            }}
-          />
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={stt.listening ? "Listening… speak now" : `Ask about ${slide.title}...`}
+              className="w-full text-[13px] px-4 py-3 rounded-xl outline-none transition-all placeholder-gray-400 text-gray-800 font-medium"
+              style={{
+                background: stt.listening ? "#fef2f2" : "#f8faff",
+                border: `1px solid ${stt.listening ? "#fca5a5" : "#e2e8f0"}`,
+              }}
+              onFocus={(e) => {
+                if (!stt.listening) {
+                  e.target.style.borderColor = "#2563eb50";
+                  e.target.style.background = "#ffffff";
+                }
+              }}
+              onBlur={(e) => {
+                if (!stt.listening) {
+                  e.target.style.borderColor = "#e2e8f0";
+                  e.target.style.background = "#f8faff";
+                }
+              }}
+            />
+          </div>
+
           {/* Voice input button */}
           {stt.supported && (
             <motion.button
@@ -562,19 +615,31 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
               whileTap={{ scale: 0.92 }}
               type="button"
               onClick={stt.listening ? stt.stop : stt.start}
-              title={stt.listening ? "Stop voice input" : "Voice input"}
-              className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+              title={stt.listening ? "Stop recording" : "Speak your question"}
+              className="relative w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
               style={{
-                background: stt.listening ? "#ef4444" : "#f1f5f9",
-                border: "1px solid #e2e8f0",
-                boxShadow: stt.listening ? "0 2px 12px #ef444455" : "none",
+                background: stt.listening
+                  ? "linear-gradient(135deg, #ef4444, #dc2626)"
+                  : "#f1f5f9",
+                border: `1px solid ${stt.listening ? "#ef444440" : "#e2e8f0"}`,
+                boxShadow: stt.listening ? "0 2px 16px #ef444460" : "none",
               }}
             >
+              {/* Pulse ring when active */}
+              {stt.listening && (
+                <motion.span
+                  animate={{ scale: [1, 1.6, 1], opacity: [0.6, 0, 0.6] }}
+                  transition={{ duration: 1.2, repeat: Infinity }}
+                  className="absolute inset-0 rounded-xl"
+                  style={{ background: "#ef444430" }}
+                />
+              )}
               {stt.listening
-                ? <MicOff className="w-4 h-4 text-white" />
+                ? <MicOff className="w-4 h-4 text-white relative z-10" />
                 : <Mic className="w-4 h-4 text-gray-500" />}
             </motion.button>
           )}
+
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}

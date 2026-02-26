@@ -118,9 +118,13 @@ export function useTTS(text: string) {
 // ─── STT Hook ─────────────────────────────────────────────────────────────────
 interface ISpeechRecognitionResult {
   readonly [index: number]: { readonly transcript: string };
+  readonly isFinal: boolean;
 }
 interface ISpeechRecognitionEvent {
   readonly results: ArrayLike<ISpeechRecognitionResult>;
+}
+interface ISpeechRecognitionErrorEvent {
+  readonly error: string;
 }
 interface ISpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -131,7 +135,7 @@ interface ISpeechRecognition extends EventTarget {
   abort(): void;
   onresult: ((e: ISpeechRecognitionEvent) => void) | null;
   onend: (() => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((e: ISpeechRecognitionErrorEvent) => void) | null;
 }
 type SpeechRecognitionCtor = new () => ISpeechRecognition;
 
@@ -142,46 +146,84 @@ declare global {
   }
 }
 
+export type STTError = "not-allowed" | "no-speech" | "network" | "unsupported" | null;
+
 export function useSTT(onResult: (transcript: string) => void) {
   const [listening, setListening]   = useState(false);
   const [supported, setSupported]   = useState(false);
-  const recognitionRef = useRef<ISpeechRecognition | null>(null);
+  const [interim, setInterim]       = useState("");       // live preview text
+  const [error, setError]           = useState<STTError>(null);
+  const recognitionRef              = useRef<ISpeechRecognition | null>(null);
+  const onResultRef                 = useRef(onResult);
+
+  // keep callback ref fresh without re-creating recognition
+  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
 
   useEffect(() => {
     const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (SR) {
-      setSupported(true);
-      const rec = new SR();
-      rec.continuous      = false;
-      rec.interimResults  = false;
-      rec.lang            = "en-US";
-      rec.onresult = (e: ISpeechRecognitionEvent) => {
-        const text = Array.from(e.results as ArrayLike<ISpeechRecognitionResult>)
-          .map((r: ISpeechRecognitionResult) => r[0].transcript)
-          .join(" ")
-          .trim();
-        if (text) onResult(text);
-      };
-      rec.onend  = () => setListening(false);
-      rec.onerror = () => setListening(false);
-      recognitionRef.current = rec;
+    if (!SR) {
+      setSupported(false);
+      return;
     }
+    setSupported(true);
+    const rec = new SR();
+    rec.continuous     = true;   // keep listening until user stops
+    rec.interimResults = true;   // show live text as user speaks
+    rec.lang           = "en-US";
+
+    rec.onresult = (e: ISpeechRecognitionEvent) => {
+      let interimText = "";
+      let finalText   = "";
+      Array.from(e.results as ArrayLike<ISpeechRecognitionResult>).forEach(r => {
+        const t = r[0].transcript;
+        if (r.isFinal) finalText += t + " ";
+        else interimText += t;
+      });
+      if (interimText) setInterim(interimText);
+      if (finalText.trim()) {
+        setInterim("");
+        onResultRef.current(finalText.trim());
+      }
+    };
+
+    rec.onend = () => {
+      setListening(false);
+      setInterim("");
+    };
+
+    rec.onerror = (e: ISpeechRecognitionErrorEvent) => {
+      setListening(false);
+      setInterim("");
+      if (e.error === "not-allowed" || e.error === "permission-denied") {
+        setError("not-allowed");
+      } else if (e.error === "no-speech") {
+        setError("no-speech");
+      } else if (e.error === "network") {
+        setError("network");
+      } else {
+        setError(null);
+      }
+    };
+
+    recognitionRef.current = rec;
     return () => { recognitionRef.current?.abort(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const start = useCallback(() => {
     if (!recognitionRef.current || listening) return;
+    setError(null);
+    setInterim("");
     try {
       recognitionRef.current.start();
       setListening(true);
-    } catch { /* already started */ }
+    } catch { /* already running */ }
   }, [listening]);
 
   const stopSTT = useCallback(() => {
     recognitionRef.current?.stop();
     setListening(false);
+    setInterim("");
   }, []);
 
-  return { listening, supported, start, stop: stopSTT };
+  return { listening, supported, interim, error, start, stop: stopSTT };
 }
