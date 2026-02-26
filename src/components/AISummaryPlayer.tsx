@@ -20,27 +20,64 @@ function geminiUrl(model: string) {
 
 type SummaryLength = "short" | "medium" | "detailed" | "custom";
 
-const LENGTH_CONFIG: Record<Exclude<SummaryLength, "custom">, { label: string; lines: number; desc: string }> = {
-  short:    { label: "Short",    lines: 3,  desc: "3 lines · quick glance"   },
-  medium:   { label: "Medium",   lines: 6,  desc: "6 lines · balanced"       },
-  detailed: { label: "Detailed", lines: 12, desc: "12 lines · in-depth"      },
+const LENGTH_CONFIG: Record<Exclude<SummaryLength, "custom">, { label: string; lines: number; desc: string; temp: number }> = {
+  short:    { label: "Short",    lines: 3,  desc: "3 sentences · quick glance",  temp: 0.3 },
+  medium:   { label: "Medium",   lines: 7,  desc: "7 sentences · balanced",      temp: 0.5 },
+  detailed: { label: "Detailed", lines: 14, desc: "14 sentences · in-depth",     temp: 0.7 },
 };
 
-async function generateSummary(slide: Slide, lines: number): Promise<string> {
-  const prompt = `You are ElexicoAI. Write a clear, natural-sounding spoken summary about "${slide.title}" for a learning app.
+/** Split text into clean individual sentences */
+function splitSentences(text: string): string[] {
+  // Split on ., !, ? followed by space or end — handles abbreviations badly but good enough
+  return text
+    .replace(/\n+/g, " ")
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 8); // drop tiny fragments
+}
 
-Rules:
-- Write EXACTLY ${lines} sentences (no more, no fewer).
-- Each sentence is complete, simple and flows naturally when read aloud.
-- Cover: what it is, why it matters, and one real-world connection.
-- No bullet points, no markdown, no headers. Plain sentences only.
-- Do NOT start with "Here is…" or "Sure,…".
+/** Trim or pad the response to exactly `target` sentences */
+function enforceLength(text: string, target: number): string {
+  const sentences = splitSentences(text);
+  if (sentences.length >= target) {
+    // Trim to target
+    return sentences.slice(0, target).join(" ");
+  }
+  // We got fewer — return what we have (still better than nothing)
+  return sentences.join(" ");
+}
 
-Topic context: ${slide.description}
-Key points: ${slide.keyPoints.join("; ")}
-Real-world: ${slide.realWorldExample}
+async function generateSummary(slide: Slide, lines: number, temperature: number): Promise<string> {
+  // Build a very explicit, count-anchored prompt
+  const numberedList = Array.from({ length: lines }, (_, i) => `${i + 1}. [sentence ${i + 1}]`).join("\n");
 
-Write the ${lines}-sentence spoken summary now:`;
+  const depthInstruction =
+    lines <= 4
+      ? "Focus only on the single most important idea — what it is and one key benefit."
+      : lines <= 8
+      ? "Cover what it is, why it matters, how it works, and one real-world use case."
+      : "Cover what it is, why it matters, how it works, its components, trade-offs, real-world use cases, and why developers use it.";
+
+  const prompt = `You are ElexicoAI, a learning assistant. Your ONLY job right now is to write EXACTLY ${lines} sentences about "${slide.title}".
+
+STRICT OUTPUT FORMAT — follow this template exactly, replacing each [sentence N]:
+${numberedList}
+
+RULES:
+1. Output EXACTLY ${lines} numbered sentences — not ${lines - 1}, not ${lines + 1}, exactly ${lines}.
+2. ${depthInstruction}
+3. Every sentence must be self-contained, clear, and flow naturally when read aloud.
+4. No bullet sub-points. No markdown. No headers. Just numbered sentences.
+5. Do NOT write introductions like "Here is a summary" or "Sure!".
+
+SLIDE CONTENT (use this as your knowledge base):
+- Title: ${slide.title}
+- What it is: ${slide.description}
+- Key points: ${slide.keyPoints.join(" | ")}
+- Real-world: ${slide.realWorldExample}
+- Extra context: ${slide.aiInsight}
+
+Now write EXACTLY ${lines} numbered sentences:`;
 
   for (const model of GEMINI_MODELS) {
     try {
@@ -50,22 +87,46 @@ Write the ${lines}-sentence spoken summary now:`;
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.6,
-            maxOutputTokens: lines * 60,
+            temperature,
+            maxOutputTokens: Math.max(lines * 80, 256),
           },
         }),
       });
       const data = await res.json();
       if (res.status === 429 || res.status === 403) continue;
       if (!res.ok) continue;
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (text) return text;
+      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!raw) continue;
+
+      // Strip the numbers "1. ", "2. " etc. from the output, then rejoin
+      const stripped = raw
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .map((line: string) => line.replace(/^\d+\.\s*/, "").trim())
+        .filter((line: string) => line.length > 4)
+        .join(" ");
+
+      return enforceLength(stripped, lines);
     } catch {
       continue;
     }
   }
-  // Fallback — stitch slide content together
-  return [slide.description, ...slide.keyPoints.slice(0, Math.min(lines - 1, 4))].join(" ");
+
+  // Fallback — manually build from slide data to match length
+  const fallbackParts = [
+    slide.description,
+    ...slide.keyPoints,
+    slide.realWorldExample,
+    slide.aiInsight,
+  ].filter(Boolean);
+
+  const sentences: string[] = [];
+  for (const part of fallbackParts) {
+    const sents = splitSentences(part);
+    sentences.push(...sents);
+    if (sentences.length >= lines) break;
+  }
+  return sentences.slice(0, lines).join(" ");
 }
 
 /* ─── TTS hook ─── */
@@ -180,13 +241,18 @@ export default function AISummaryPlayer({ slide }: Props) {
   const effectiveLines =
     summaryLength === "custom" ? customLines : LENGTH_CONFIG[summaryLength].lines;
 
+  const effectiveTemp =
+    summaryLength === "custom"
+      ? 0.5
+      : LENGTH_CONFIG[summaryLength].temp;
+
   const handleGenerate = async () => {
     tts.stop();
     setSummaryText(null);
     setGenError(null);
     setIsGenerating(true);
     try {
-      const text = await generateSummary(slide, effectiveLines);
+      const text = await generateSummary(slide, effectiveLines, effectiveTemp);
       setSummaryText(text);
     } catch {
       setGenError("Couldn't generate summary. Please try again.");
@@ -197,8 +263,11 @@ export default function AISummaryPlayer({ slide }: Props) {
 
   const currentLengthLabel =
     summaryLength === "custom"
-      ? `Custom · ${customLines} lines`
+      ? `Custom · ${customLines} sentences`
       : LENGTH_CONFIG[summaryLength].desc;
+
+  // Count actual sentences delivered (for the card label)
+  const actualSentenceCount = summaryText ? splitSentences(summaryText).length : effectiveLines;
 
   const isPlaying = tts.state === "playing";
   const isPaused  = tts.state === "paused";
@@ -220,7 +289,7 @@ export default function AISummaryPlayer({ slide }: Props) {
             <button
               key={key}
               onClick={() => { setSummaryLength(key); setShowCustomInput(false); }}
-              className="flex-1 py-2 rounded-xl text-[11px] font-black transition-all capitalize tracking-wide"
+              className="flex-1 py-2.5 rounded-xl text-[11px] font-black transition-all capitalize tracking-wide flex flex-col items-center gap-0.5"
               style={
                 summaryLength === key
                   ? { background: "#2563eb1e", color: "#2563eb", border: "1px solid #2563eb35" }
@@ -228,6 +297,7 @@ export default function AISummaryPlayer({ slide }: Props) {
               }
             >
               {LENGTH_CONFIG[key].label}
+              <span className="text-[9px] font-bold opacity-70">{LENGTH_CONFIG[key].lines} sent.</span>
             </button>
           ))}
           {/* Custom chip */}
@@ -352,7 +422,7 @@ export default function AISummaryPlayer({ slide }: Props) {
               <div className="flex items-center gap-2 mb-3">
                 <Mic className="w-3.5 h-3.5 text-blue-500" />
                 <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.14em]">
-                  AI Summary · {effectiveLines} sentences
+                  AI Summary · {actualSentenceCount} sentences
                 </span>
               </div>
               <p className="text-[13px] text-gray-700 leading-relaxed relative z-10">
