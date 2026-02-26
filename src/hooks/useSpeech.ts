@@ -12,18 +12,45 @@ export function globalStop() {
   window.speechSynthesis.cancel();
 }
 
-function getBestVoice(): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis.getVoices();
+/** Pick best Indian English voice from a loaded voices list */
+function pickIndianVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   return (
-    // 1st priority: Indian English voices (Ravi, Heera, Neerja, Google हिन्दी English, etc.)
-    voices.find(v => v.lang === "en-IN" && (v.name.includes("Google") || v.name.includes("Ravi") || v.name.includes("Heera") || v.name.includes("Neerja"))) ??
-    // 2nd: any en-IN voice
+    // 1st: Google en-IN (Ravi / Heera / Neerja — Chrome built-ins)
+    voices.find(v => v.lang === "en-IN" && v.name.toLowerCase().includes("google")) ??
+    // 2nd: any named Indian voice
+    voices.find(v => v.lang === "en-IN" && /ravi|heera|neerja|veena|lekha/i.test(v.name)) ??
+    // 3rd: any en-IN voice
     voices.find(v => v.lang === "en-IN") ??
-    // 3rd: Google English as fallback
-    voices.find(v => v.lang.startsWith("en") && v.name.includes("Google")) ??
+    // 4th: Google English fallback
+    voices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("google")) ??
     voices.find(v => v.lang.startsWith("en")) ??
     null
   );
+}
+
+/**
+ * Returns a Promise that resolves to the best Indian English voice.
+ * Handles the Chrome async voice-loading race condition.
+ */
+function getIndianVoiceAsync(): Promise<SpeechSynthesisVoice | null> {
+  return new Promise(resolve => {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      resolve(pickIndianVoice(voices));
+      return;
+    }
+    // Voices not loaded yet — wait for the event (fires once on Chrome)
+    const handler = () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", handler);
+      resolve(pickIndianVoice(window.speechSynthesis.getVoices()));
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", handler);
+    // Safety timeout — resolve with null after 2 s if event never fires
+    setTimeout(() => {
+      window.speechSynthesis.removeEventListener("voiceschanged", handler);
+      resolve(null);
+    }, 2000);
+  });
 }
 
 // ─── TTS Hook ─────────────────────────────────────────────────────────────────
@@ -50,35 +77,32 @@ export function useTTS(text: string) {
 
   const _speak = useCallback((t: string) => {
     globalStop();
-    const utt = new SpeechSynthesisUtterance(t);
-    utt.rate  = 0.88;   // slightly slower — warm, unhurried Indian cadence
-    utt.pitch = 1.1;    // gentle lift — sounds polite and friendly
-    utt.lang  = "en-IN";
 
-    // voices may not be loaded yet — retry once
-    const voice = getBestVoice();
-    if (voice) utt.voice = voice;
-    else {
-      window.speechSynthesis.onvoiceschanged = () => {
-        const v = getBestVoice();
-        if (v && uttRef.current) uttRef.current.voice = v;
+    const doSpeak = (voice: SpeechSynthesisVoice | null) => {
+      const utt = new SpeechSynthesisUtterance(t);
+      utt.rate  = 0.85;   // soft, unhurried Indian cadence
+      utt.pitch = 1.08;   // gentle warmth — not too high, not flat
+      utt.lang  = "en-IN";
+      if (voice) utt.voice = voice;
+
+      const words = t.split(/\s+/).length;
+      let wordIdx = 0;
+      utt.onboundary = (e) => {
+        if (e.name === "word") {
+          wordIdx++;
+          setProgress(Math.min(99, Math.round((wordIdx / words) * 100)));
+        }
       };
-    }
+      utt.onend   = () => { setState("done");  setProgress(100); };
+      utt.onerror = () => setState("error");
 
-    const words = t.split(/\s+/).length;
-    let wordIdx = 0;
-    utt.onboundary = (e) => {
-      if (e.name === "word") {
-        wordIdx++;
-        setProgress(Math.min(99, Math.round((wordIdx / words) * 100)));
-      }
+      uttRef.current = utt;
+      window.speechSynthesis.speak(utt);
+      setState("playing");
     };
-    utt.onend   = () => { setState("done");  setProgress(100); };
-    utt.onerror = () => setState("error");
 
-    uttRef.current = utt;
-    window.speechSynthesis.speak(utt);
-    setState("playing");
+    // Async: wait for voices to load (fixes Chrome race condition on Linux)
+    getIndianVoiceAsync().then(doSpeak);
   }, []);
 
   const play = useCallback(() => {
