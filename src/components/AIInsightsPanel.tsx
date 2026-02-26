@@ -5,65 +5,28 @@ import type { Slide } from "../data/slides";
 import AISummaryPlayer from "./AISummaryPlayer";
 import { useTTS, useSTT, globalStop } from "../hooks/useSpeech";
 
-const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "") as string;
-
-// Put working models FIRST — ones with quota available
-const GEMINI_MODELS = [
-  "gemma-3-4b-it",
-  "gemma-3-1b-it",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash-lite",
-];
-
-function geminiUrl(model: string) {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-}
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "https://elexico-backend-ye1c.onrender.com") as string;
 
 // ── AI-generated summary for the Summary tab ──────────────────────────────
 async function getAISummaryData(slide: Slide): Promise<{ description: string; keyPoints: string[] }> {
-  const prompt = `You are ElexicoAI. Topic: "${slide.title}".
-
-RULES:
-- Do NOT copy or reuse any wording from the slide text below.
-- "description": exactly 1 sentence, max 12 words, use a simple analogy.
-- "keyPoints": exactly 4 items, each max 6 words, start with a verb, no full stops.
-
-Slide text to AVOID: "${slide.description}" | ${slide.keyPoints.join(" | ")}
-
-Return ONLY valid JSON, no markdown, no extra text:
-{"description":"...","keyPoints":["...","...","...","..."]}`;
-
-  for (const model of GEMINI_MODELS) {
-    try {
-      const res = await fetch(geminiUrl(model), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 200 },
-        }),
-      });
-      if (res.status === 429 || res.status === 403) { continue; }
-      if (!res.ok) { continue; }
-      const data = await res.json();
-      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.description && Array.isArray(parsed.keyPoints) && parsed.keyPoints.length >= 2) {
-            // Post-process: hard-trim description to first sentence, key points to 7 words max
-            const desc = parsed.description.split(/[.!?]/)[0].trim().replace(/,\s*$/, "") + ".";
-            const kps: string[] = (parsed.keyPoints as string[]).slice(0, 4).map((kp: string) =>
-              kp.split(" ").slice(0, 7).join(" ").replace(/[.,]+$/, "")
-            );
-            return { description: desc, keyPoints: kps };
-          }
-        } catch { /* malformed JSON — try next model */ }
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/summary`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slideTitle: slide.title,
+        slideDescription: slide.description,
+        slideKeyPoints: slide.keyPoints,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { description?: string; keyPoints?: string[] };
+      if (data.description && Array.isArray(data.keyPoints)) {
+        return { description: data.description, keyPoints: data.keyPoints };
       }
-    } catch { continue; }
-  }
-  // Fallback
+    }
+  } catch { /* fallback below */ }
+  // Fallback to slide data
   return {
     description: slide.aiInsight.split(/[.!?]/)[0].trim() + ".",
     keyPoints: slide.keyPoints.map(kp => kp.split(" ").slice(0, 7).join(" ")),
@@ -71,56 +34,18 @@ Return ONLY valid JSON, no markdown, no extra text:
 }
 
 async function getAIResponse(question: string, slide: Slide): Promise<string> {
-  const prompt = `You are ElexicoAI, a concise AI assistant inside a learning app.
-
-STRICT RULES — follow these exactly:
-1. Answer in 2-3 short, simple sentences ONLY. Never more.
-2. Use plain, easy-to-understand language. No jargon unless asked.
-3. Answer ANY question asked — backend, general knowledge, science, math, history, anything.
-4. Never use bullet points, lists, or headers. Just plain sentences.
-5. Never say you can't answer or that something is out of scope.
-
-Current slide (for context only if relevant): "${slide.title}"
-
-Question: ${question}
-
-Answer in 2-3 sentences:`;
-
-  for (const model of GEMINI_MODELS) {
-    try {
-      const res = await fetch(geminiUrl(model), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 150 },
-        }),
-      });
-
-      const data = await res.json();
-
-      // If quota exceeded or permission denied, try the next model
-      if (res.status === 429 || res.status === 403 || data?.error?.code === 429 || data?.error?.code === 403) {
-        console.warn(`Model ${model} unavailable (${res.status}), trying next...`);
-        continue;
-      }
-
-      if (!res.ok) {
-        console.warn(`Model ${model} error ${res.status}, trying next...`);
-        continue;
-      }
-
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (text) return text;
-
-    } catch (err) {
-      console.error(`Model ${model} fetch failed:`, err);
-      continue;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, slideTitle: slide.title }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { reply?: string; error?: string };
+      if (data.reply) return data.reply;
     }
-  }
-
-  // All models exhausted — return fallback
-  return `All AI models are currently at their daily limit. Here's a quick note from the slide: ${slide.aiInsight}`;
+  } catch { /* fallback below */ }
+  return `AI is currently unavailable. Quick note: ${slide.aiInsight}`;
 }
 
 interface Message {

@@ -7,17 +7,8 @@ import {
 import type { Slide } from "../data/slides";
 import { useTTS, globalStop } from "../hooks/useSpeech";
 
-/* ─── Gemini helpers (same key + rotation as AIInsightsPanel) ─── */
-const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY || "") as string;
-const GEMINI_MODELS = [
-  "gemma-3-4b-it",
-  "gemma-3-1b-it",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash-lite",
-];
-function geminiUrl(model: string) {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-}
+/* ─── Backend API helper ─── */
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "https://elexico-backend-ye1c.onrender.com") as string;
 
 type SummaryLength = "short" | "medium" | "detailed" | "custom";
 
@@ -78,77 +69,43 @@ function buildSentencePool(slide: Slide): string[] {
 }
 
 /**
- * Use AI to polish a single raw sentence into a smooth, natural spoken sentence.
- * One sentence in → one sentence out. No counting involved.
+ * Use backend to polish a single raw sentence into a smooth, natural spoken sentence.
  */
 async function polishSentence(
   raw: string,
   slideTitle: string,
-  model: string,
   temperature: number
 ): Promise<string> {
-  const prompt = `Rewrite this one sentence about "${slideTitle}" to sound clear and natural when spoken aloud. Output ONLY the rewritten sentence — no extra words, no numbering, no quotes.
-
-Original: ${raw}
-
-Rewritten:`;
-
   try {
-    const res = await fetch(geminiUrl(model), {
+    const res = await fetch(`${BACKEND_URL}/api/polish-sentence`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature, maxOutputTokens: 120 },
-      }),
+      body: JSON.stringify({ sentence: raw, slideTitle, temperature }),
     });
-    if (!res.ok) return raw; // fallback to raw
-    const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (!text || text.length < 5) return raw;
-    // Take only the first line (model might add extras)
-    const firstLine = text.split("\n")[0].trim();
-    return firstLine || raw;
+    if (!res.ok) return raw;
+    const data = await res.json() as { polished?: string };
+    return data.polished?.trim() || raw;
   } catch {
     return raw;
   }
 }
 
 async function generateSummary(slide: Slide, lines: number, temperature: number): Promise<string[]> {
-  // Step 1 — build the pool and slice to exactly `lines` sentences
+  // Build the sentence pool from slide data
   const pool = buildSentencePool(slide);
   const rawSentences = pool.slice(0, lines);
 
-  // If pool is smaller than requested (unlikely but safe), repeat from pool
+  // If pool is smaller than requested, repeat from pool
   while (rawSentences.length < lines) {
     rawSentences.push(pool[rawSentences.length % pool.length] ?? slide.description);
   }
 
-  // Step 2 — find a working model (test with one quick call)
-  let workingModel = GEMINI_MODELS[0];
-  for (const model of GEMINI_MODELS) {
-    try {
-      const testRes = await fetch(geminiUrl(model), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: "say ok" }] }],
-          generationConfig: { maxOutputTokens: 5 },
-        }),
-      });
-      if (testRes.status !== 429 && testRes.status !== 403 && testRes.ok) {
-        workingModel = model;
-        break;
-      }
-    } catch { continue; }
-  }
-
-  // Step 3 — polish each sentence individually (parallel for speed)
+  // Polish each sentence via backend (parallel for speed)
   const polished = await Promise.all(
-    rawSentences.map(s => polishSentence(s, slide.title, workingModel, temperature))
+    rawSentences.map(s => polishSentence(s, slide.title, temperature))
   );
 
-  return polished; // exactly `lines` sentences, guaranteed
+  return polished;
 }
 
 /* ─── Main component ─── */
