@@ -142,8 +142,7 @@ export default function AIInsightsPanel({ slide }: AIInsightsPanelProps) {
     const reply = await getAIResponse(text, slide);
     setMessages((prev) => [...prev, { id: uid(), role: "ai", text: reply }]);
     setIsTyping(false);
-    // Auto-read the AI reply
-    readAloud(reply);
+    // Audio is NOT auto-played — user can click the 🔊 button on any message
   };
 
   const deleteMessage = (id: string) => {

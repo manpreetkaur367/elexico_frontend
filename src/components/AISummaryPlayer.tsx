@@ -5,7 +5,7 @@ import {
   Mic, Square, Hash,
 } from "lucide-react";
 import type { Slide } from "../data/slides";
-import { useTTS, globalStop } from "../hooks/useSpeech";
+import { useTTS } from "../hooks/useSpeech";
 
 /* ─── Backend API helper ─── */
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || "https://elexico-backend-ye1c.onrender.com") as string;
@@ -153,9 +153,7 @@ export default function AISummaryPlayer({ slide }: Props) {
     try {
       const result = await generateSummary(slide, effectiveLines, effectiveTemp);
       setSentences(result); // always exactly `effectiveLines` items
-      // Auto-play the new summary — stop any other audio first
-      globalStop();
-      setTimeout(() => tts.speak(result.join(" ")), 120);
+      // Audio is NOT auto-played — user presses Play when ready
     } catch {
       setGenError("Couldn't generate summary. Please try again.");
     } finally {
